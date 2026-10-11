@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alan's World</title>
+  <meta name="description" content="Games made by Alan, for Alan and his friends.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 16px 32px;
+      font-family: "Trebuchet MS", "Avenir Next", system-ui, sans-serif;
+      color: #fff;
+      text-align: center;
+      background: #1b1447 radial-gradient(circle at 50% 0%, #4b2fa8 0%, #1b1447 60%) no-repeat;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.5rem, 9vw, 4.5rem);
+      letter-spacing: 1px;
+      color: #ffd93d;
+      text-shadow: 0 4px 0 #e0662b, 0 8px 18px rgba(0, 0, 0, .35);
+    }
+
+    .tagline {
+      margin: 16px 0 40px;
+      font-size: clamp(1rem, 3.5vw, 1.3rem);
+      color: #d9d2ff;
+    }
+
+    .games {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 28px;
+      width: 100%;
+      max-width: 640px;
+    }
+
+    .game {
+      flex: 1 1 240px;
+      max-width: 290px;
+      padding: 24px 20px 22px;
+      border-radius: 28px;
+      color: #fff;
+      text-decoration: none;
+      border: 4px solid rgba(255, 255, 255, .85);
+      box-shadow: 0 8px 0 rgba(0, 0, 0, .3);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+    .game:hover,
+    .game:focus-visible {
+      transform: translateY(-6px) rotate(-1.5deg);
+      box-shadow: 0 14px 0 rgba(0, 0, 0, .3);
+      outline: none;
+    }
+
+    .game:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 rgba(0, 0, 0, .3);
+    }
+
+    .tower { background: linear-gradient(160deg, #38b6ff, #2a62d8); }
+    .alien { background: linear-gradient(160deg, #7be04f, #159a6c); }
+
+    .game svg {
+      display: block;
+      width: 140px;
+      height: 140px;
+      margin: 0 auto 12px;
+    }
+
+    .game h2 {
+      margin: 0 0 12px;
+      font-size: 1.6rem;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, .25);
+    }
+
+    .play {
+      display: inline-block;
+      padding: 8px 22px;
+      border-radius: 999px;
+      background: #fff;
+      color: #1b1447;
+      font-weight: bold;
+    }
+
+    footer {
+      margin-top: auto;
+      padding-top: 48px;
+      font-size: .9rem;
+      color: #a99fe0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .game { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Alan's World</h1>
+  <p class="tagline">Games made by Alan, age 9, for me and my friends. Click one to play!</p>
+
+  <main class="games">
+    <a class="game tower" href="https://yunks128.github.io/the-tower/">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="94" cy="24" r="12" fill="#ffd93d"/>
+        <path d="M34 22h10v8h10v-8h12v8h10v-8h10v22H34z" fill="#f4f1ff"/>
+        <rect x="40" y="44" width="40" height="64" fill="#dcd6f7"/>
+        <path d="M40 60h40M40 78h40M40 96h40" stroke="#b3a9e6" stroke-width="3"/>
+        <rect x="54" y="52" width="12" height="16" rx="6" fill="#1b1447"/>
+        <path d="M52 108V92a8 8 0 0 1 16 0v16z" fill="#8a4b2a"/>
+        <rect x="24" y="106" width="72" height="8" rx="4" fill="#1b1447" opacity=".35"/>
+      </svg>
+      <h2>The Tower</h2>
+      <span class="play">▶ Play</span>
+    </a>
+
+    <a class="game alien" href="https://yunks128.github.io/alien-boom-boom/">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <path d="M44 26 36 10M76 26l8-16" stroke="#1b1447" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="36" cy="10" r="5" fill="#ffd93d"/>
+        <circle cx="84" cy="10" r="5" fill="#ffd93d"/>
+        <path d="M60 20c24 0 38 17 38 38 0 26-20 48-38 48S22 84 22 58c0-21 14-38 38-38z" fill="#c8ff5a" stroke="#1b1447" stroke-width="4"/>
+        <ellipse cx="44" cy="58" rx="10" ry="15" fill="#1b1447" transform="rotate(-18 44 58)"/>
+        <ellipse cx="76" cy="58" rx="10" ry="15" fill="#1b1447" transform="rotate(18 76 58)"/>
+        <circle cx="41" cy="52" r="3" fill="#fff"/>
+        <circle cx="73" cy="52" r="3" fill="#fff"/>
+        <path d="M48 86q12 9 24 0" fill="none" stroke="#1b1447" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <h2>Alien Boom Boom</h2>
+      <span class="play">▶ Play</span>
+    </a>
+  </main>
+
+  <footer>Made by Alan 🚀</footer>
+</body>
+</html>
