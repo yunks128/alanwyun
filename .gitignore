@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+build/
+_site/
+scores.json
+alien_boom_boom_save.json
+.DS_Store
