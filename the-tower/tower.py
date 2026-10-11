@@ -70,8 +70,10 @@ SWING_COOLDOWN = 0.38
 
 def story_rules(story):
     """Return (ghost count, has lava pool, has flamethrower) for a story."""
-    if story < 10:
+    if story < 3:
         return random.randint(2, 3), random.random() < 0.35, False
+    if story < 10:
+        return random.randint(2, 3), random.random() < 0.35, True
     if story <= 20:
         return 3, random.random() < 0.25, True
     return random.randint(1, 5), random.random() < 0.40, random.random() < 0.50
@@ -357,11 +359,11 @@ class Game:
             return
 
         def work():
-            if new_entry:
-                http("POST", LEADERBOARD_URL + LEADERBOARD_PATH, json.dumps(new_entry))
-            rankings = fetch_online_rankings()
-            if rankings is not None:
-                self.online = rankings
+            rankings = None
+            if not new_entry or http("POST", LEADERBOARD_URL + LEADERBOARD_PATH, json.dumps(new_entry)) is not None:
+                rankings = fetch_online_rankings()
+            # if the score could not be uploaded, show this device's ranking so the run still appears
+            self.online = rankings
             print("online ranking:", "unavailable" if rankings is None else f"{len(rankings)} scores")
 
         if WEB:
@@ -409,7 +411,7 @@ class Game:
                 return
             if key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 self.save_score()
-            elif key == pygame.K_TAB:
+            elif key == pygame.K_DOWN:  # (Tab would move the keyboard away from the game in a browser)
                 self.name = random.choice([n for n in FUN_NAMES if n != self.name])
                 self.name_fresh = True
             elif key == pygame.K_BACKSPACE:
@@ -699,7 +701,7 @@ class Game:
         cursor = "|" if int(self.time * 2) % 2 == 0 else ""
         self.text(self.name + cursor, 40, (255, 225, 110) if self.name_fresh else (255, 255, 255),
                   (box.x + 16, box.centery), "midleft")
-        self.text("Type your name        Tab: another funny name", 26, (190, 190, 210), (W // 2, 412), "center")
+        self.text("Type to change your name        Down arrow: another funny name", 26, (190, 190, 210), (W // 2, 412), "center")
         self.text("Enter: save my score", 32, (255, 255, 255), (W // 2, 474), "center")
 
     def draw_title(self):
