@@ -6,6 +6,8 @@ Controls
     Space                 attack with the equipped weapon
     Q                     swap between weapons you own
     P or Esc              pause
+
+When a run ends you type a name, and your score joins the ranking shared by every player.
 """
 import asyncio
 import json
@@ -13,6 +15,8 @@ import math
 import os
 import random
 import sys
+import threading
+import urllib.request
 
 import pygame
 
@@ -33,6 +37,18 @@ SCORE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scores.js
 GHOST_POINTS = 10
 STORY_POINTS = 50
 SCORE_KEY = "the-tower-scores"       # browser localStorage key used instead of the file
+MAX_RANKINGS = 5
+# Shared online ranking (Firebase Realtime Database, the same one Alien Boom Boom uses).
+# Leave the address empty to keep rankings on this device only.
+LEADERBOARD_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com"
+LEADERBOARD_PATH = "/tower-scores.json"
+LEADERBOARD_TIMEOUT_S = 5
+MAX_NAME_LEN = 16
+NAME_KEY_DELAY = 0.5   # keys mashed while dying are ignored this long on the name screen
+FUN_NAMES = [
+    "Sir Climbs-a-Lot", "Ghost Bonker", "Lava Hopper", "Captain Stairs", "Tower Taco",
+    "Brave Noodle", "Spooky Waffle", "Flame Dodger", "Turbo Knight", "Laser Pickle",
+]
 
 ROCK_W = 46
 LAVA_DEPTH = 20        # how far below the floor the lava surface sits
@@ -206,16 +222,67 @@ def make_backdrop():
     return s
 
 
+def http(method, url, body=None):
+    """Send one web request and return the reply text, or None if it failed."""
+    if WEB:
+        # in a browser, ask the page's own JavaScript to make the request
+        from platform import window
+        script = (
+            "(function(){try{var x=new XMLHttpRequest();"
+            f"x.open({json.dumps(method)},{json.dumps(url)},false);"
+            f"x.send({json.dumps(body) if body is not None else 'null'});"
+            "return x.status+'\\n'+x.responseText;}catch(e){return '0\\n';}})()"
+        )
+        status, _, text = str(window.eval(script)).partition("\n")
+        return text if status == "200" else None
+    try:
+        data = body.encode() if body is not None else None
+        request = urllib.request.Request(url, data=data, method=method)
+        with urllib.request.urlopen(request, timeout=LEADERBOARD_TIMEOUT_S) as reply:
+            return reply.read().decode()
+    except (OSError, ValueError):
+        return None
+
+
+def fetch_online_rankings():
+    """Top (score, story, name) rows from the shared ranking, best first, or None if it can't be reached."""
+    query = f"?orderBy=%22score%22&limitToLast={MAX_RANKINGS}"
+    try:
+        rows = json.loads(http("GET", LEADERBOARD_URL + LEADERBOARD_PATH + query) or "")
+    except ValueError:
+        return None
+    if rows is None:
+        return []  # reachable, but nobody has a score yet
+    if not isinstance(rows, dict):
+        return None
+    rankings = []
+    for row in rows.values():
+        if isinstance(row, dict) and isinstance(row.get("score"), int) and isinstance(row.get("level"), int):
+            rankings.append((row["score"], row["level"], str(row.get("name", "?"))[:MAX_NAME_LEN]))
+    return sorted(rankings, reverse=True)
+
+
 class Game:
     def __init__(self, screen):
         self.screen = screen
         self.backdrop = make_backdrop()
         self.fonts = {96: pygame.font.Font(None, 96)}
+        # the built-in font has no Korean letters, so names typed in Korean need a system font
+        self.korean = None
+        if not WEB:  # browsers have no system fonts to search
+            self.korean = pygame.font.match_font("applesdgothicneo,applegothic,malgungothic,nanumgothic,notosanscjkkr")
         self.time = 0.0
-        self.state = "title"
+        self.state = "title"         # title, play, shop, name, dead, win
+        self.outcome = ""            # "dead" or "win" once a run has ended
+        self.name = ""
+        self.name_fresh = False      # True while the name is an untouched suggestion
+        self.name_time = 0.0
+        self.mine = None             # the ranking row from the run just played
+        self.online = None           # shared ranking once it has been downloaded
         self.scores = self.load_scores()
         self.new_best = False
         self.new_run()
+        self.refresh_online()
 
     # ---------------------------------------------------------------- setup
 
@@ -239,6 +306,7 @@ class Game:
         self.shop_msg = ""
 
     def load_scores(self):
+        """This device's top scores as (score, story, name), plus the last name used."""
         try:
             if WEB:
                 from platform import window
@@ -246,30 +314,70 @@ class Game:
             else:
                 with open(SCORE_FILE) as f:
                     data = json.load(f)
-            return [(int(score), int(story)) for score, story in data]
+            if isinstance(data, dict):
+                self.name = str(data.get("name", ""))[:MAX_NAME_LEN]
+                data = data["scores"]
+            # saves from before names existed are a bare list of [score, story]
+            return [(int(row[0]), int(row[1]), str(row[2]) if len(row) > 2 else "") for row in data]
         except Exception:
             return []
 
+    def ask_name(self, outcome):
+        """The run is over: ask for a name before saving the score."""
+        self.outcome = outcome
+        self.mine = None
+        if not self.name:
+            self.name = random.choice(FUN_NAMES)
+        self.name_fresh = True
+        self.name_time = self.time
+        self.state = "name"
+
     def save_score(self):
-        """Add this run to the saved top five."""
-        self.new_best = self.score > max((s for s, _ in self.scores), default=0)
-        self.scores = sorted(self.scores + [(self.score, self.story)], reverse=True)[:5]
+        """Add this run to this device's top scores and to the shared ranking."""
+        self.name = self.name.strip() or random.choice(FUN_NAMES)
+        self.mine = (self.score, self.story, self.name)
+        self.new_best = self.score > max((row[0] for row in self.scores), default=0)
+        self.scores = sorted(self.scores + [self.mine], reverse=True)[:MAX_RANKINGS]
         try:
+            save = json.dumps({"scores": self.scores, "name": self.name})
             if WEB:
                 from platform import window
-                window.localStorage.setItem(SCORE_KEY, json.dumps(self.scores))
+                window.localStorage.setItem(SCORE_KEY, save)
             else:
                 with open(SCORE_FILE, "w") as f:
-                    json.dump(self.scores, f)
+                    f.write(save)
         except Exception:
             pass
+        self.refresh_online({"name": self.name, "score": self.score, "level": self.story})
+        self.state = self.outcome
+
+    def refresh_online(self, new_entry=None):
+        """Upload new_entry (if any) and download the shared ranking."""
+        if not LEADERBOARD_URL:
+            return
+
+        def work():
+            if new_entry:
+                http("POST", LEADERBOARD_URL + LEADERBOARD_PATH, json.dumps(new_entry))
+            rankings = fetch_online_rankings()
+            if rankings is not None:
+                self.online = rankings
+            print("online ranking:", "unavailable" if rankings is None else f"{len(rankings)} scores")
+
+        if WEB:
+            work()  # browsers have no threads here; the request is quick
+        else:
+            threading.Thread(target=work, daemon=True).start()  # don't freeze the game while waiting
+
+    def rankings(self):
+        """The shared ranking when it is available, otherwise this device's own."""
+        return self.scores if self.online is None else self.online
 
     def die(self, cause):
         r = self.player.rect
         self.burst(r.centerx, r.centery, (255, 140, 30), 30)
         self.cause = cause
-        self.state = "dead"
-        self.save_score()
+        self.ask_name("dead")
 
     def next_story(self):
         self.story += 1
@@ -278,7 +386,7 @@ class Game:
 
     # ---------------------------------------------------------------- input
 
-    def on_key(self, key):
+    def on_key(self, key, char=""):
         confirm = key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE)
         if self.state == "title":
             if confirm:
@@ -296,6 +404,23 @@ class Game:
                 self.shop_sel = (self.shop_sel + 1) % len(items)
             elif confirm:
                 self.shop_buy(items[self.shop_sel])
+        elif self.state == "name":
+            if self.time - self.name_time < NAME_KEY_DELAY:
+                return
+            if key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                self.save_score()
+            elif key == pygame.K_TAB:
+                self.name = random.choice([n for n in FUN_NAMES if n != self.name])
+                self.name_fresh = True
+            elif key == pygame.K_BACKSPACE:
+                # the first edit wipes a suggested name so you can just start typing
+                self.name = "" if self.name_fresh else self.name[:-1]
+                self.name_fresh = False
+            elif char and char.isprintable() and (char != " " or (self.name and not self.name_fresh)):
+                if self.name_fresh:
+                    self.name = ""
+                    self.name_fresh = False
+                self.name = (self.name + char)[:MAX_NAME_LEN]
         elif self.state in ("dead", "win"):
             if confirm:
                 self.new_run()
@@ -480,8 +605,7 @@ class Game:
         if not lv.ghosts and r.colliderect(lv.door.inflate(-20, 0)):
             self.score += STORY_POINTS
             if self.story >= TOP_STORY:
-                self.state = "win"
-                self.save_score()
+                self.ask_name("win")
             else:
                 self.state = "shop"
 
@@ -508,9 +632,11 @@ class Game:
     # ----------------------------------------------------------------- draw
 
     def text(self, msg, size, color, pos, anchor="topleft"):
-        if size not in self.fonts:
-            self.fonts[size] = pygame.font.Font(None, size)
-        img = self.fonts[size].render(msg, True, color)
+        key = size if msg.isascii() or not self.korean else (size, "korean")
+        if key not in self.fonts:
+            # a system font is drawn bigger than the built-in one at the same size
+            self.fonts[key] = pygame.font.Font(None, size) if key == size else pygame.font.Font(self.korean, size * 2 // 3)
+        img = self.fonts[key].render(msg, True, color)
         rect = img.get_rect(**{anchor: pos})
         self.screen.blit(img, rect)
         return rect
@@ -528,10 +654,15 @@ class Game:
         self.draw_hud()
         if self.state == "shop":
             self.draw_shop()
-        elif self.state == "dead":
-            self.draw_game_over("YOU DIED", (255, 90, 80), f"{self.cause}  You reached story {self.story}.")
-        elif self.state == "win":
-            self.draw_game_over("YOU ESCAPED THE TOWER!", (255, 220, 90), f"All {TOP_STORY} stories cleared.")
+        elif self.state in ("name", "dead", "win"):
+            if self.outcome == "dead":
+                headline = ("YOU DIED", (255, 90, 80), f"{self.cause}  You reached story {self.story}.")
+            else:
+                headline = ("YOU ESCAPED THE TOWER!", (255, 220, 90), f"All {TOP_STORY} stories cleared.")
+            if self.state == "name":
+                self.draw_name(*headline)
+            else:
+                self.draw_game_over(*headline)
         elif self.paused:
             self.dim(140)
             self.text("PAUSED", 72, (240, 240, 250), (W // 2, 250), "center")
@@ -544,14 +675,32 @@ class Game:
         self.text(f"Score: {self.score}", 48, (255, 255, 255), (W // 2, 240), "center")
         if self.new_best:
             self.text("NEW HIGH SCORE!", 30, (120, 255, 150), (W // 2, 278), "center")
-        self.text("Saved high scores", 24, (170, 170, 190), (W // 2, 318), "center")
+        shared = self.online is not None
+        self.text("Rankings shared with every player" if shared else "High scores saved on this device", 24,
+                  (170, 170, 190), (W // 2, 318), "center")
         marked = False
-        for i, (score, story) in enumerate(self.scores):
-            mine = not marked and (score, story) == (self.score, self.story)
+        for i, row in enumerate(self.rankings()[:MAX_RANKINGS]):
+            score, story, name = row
+            mine = not marked and row == self.mine
             marked = marked or mine
-            self.text(f"{i + 1}.   {score} points   (story {story})", 26,
+            self.text(f"{i + 1}.   {name or '?'}   {score} points   (story {story})", 26,
                       (255, 225, 110) if mine else (200, 200, 220), (W // 2, 346 + i * 26), "center")
         self.text("Enter: redo the game        Esc: quit", 32, (255, 255, 255), (W // 2, 474), "center")
+
+    def draw_name(self, title, color, detail):
+        self.dim()
+        self.text(title, 72, color, (W // 2, 130), "center")
+        self.text(detail, 30, (230, 230, 240), (W // 2, 188), "center")
+        self.text(f"Score: {self.score}", 48, (255, 255, 255), (W // 2, 240), "center")
+        self.text("Your name for the rankings:", 28, (170, 170, 190), (W // 2, 300), "center")
+        box = pygame.Rect(W // 2 - 190, 324, 380, 56)
+        pygame.draw.rect(self.screen, (30, 26, 48), box, border_radius=8)
+        pygame.draw.rect(self.screen, (255, 225, 110), box, 2, border_radius=8)
+        cursor = "|" if int(self.time * 2) % 2 == 0 else ""
+        self.text(self.name + cursor, 40, (255, 225, 110) if self.name_fresh else (255, 255, 255),
+                  (box.x + 16, box.centery), "midleft")
+        self.text("Type your name        Tab: another funny name", 26, (190, 190, 210), (W // 2, 412), "center")
+        self.text("Enter: save my score", 32, (255, 255, 255), (W // 2, 474), "center")
 
     def draw_title(self):
         scr = self.screen
@@ -573,8 +722,9 @@ class Game:
             self.text(what, 28, (225, 225, 240), (W // 2 + 4, y))
         self.text("Defeat every ghost on a story to unlock the stairs.", 26, (190, 190, 210), (W // 2, 478), "center")
         self.text("One touch from a ghost, lava or a flame and the run is over.", 26, (255, 150, 140), (W // 2, 506), "center")
-        if self.scores:
-            self.text(f"High score: {self.scores[0][0]}", 26, (255, 225, 110), (W // 2, 248), "center")
+        if self.rankings():
+            score, _, name = self.rankings()[0]
+            self.text(f"High score: {score}" + (f" by {name}" if name else ""), 26, (255, 225, 110), (W // 2, 248), "center")
         if int(self.time * 2) % 2 == 0:
             self.text("Press Enter to start", 38, (255, 255, 255), (W // 2, 556), "center")
 
@@ -689,7 +839,7 @@ class Game:
 
     def draw_player(self):
         scr, p = self.screen, self.player
-        if self.state == "dead":
+        if self.outcome == "dead" and self.state in ("name", "dead"):
             return
         r, f = p.rect, p.facing
         step = math.sin(self.time * 16) * 5 if p.moving and p.on_ground else 0
@@ -798,7 +948,7 @@ async def main():
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN:
-                game.on_key(event.key)
+                game.on_key(event.key, event.unicode)
         game.update(dt, pygame.key.get_pressed())
         game.draw()
         pygame.display.flip()

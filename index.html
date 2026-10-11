@@ -39,9 +39,16 @@
       max-width: 640px;
     }
 
-    .game {
+    .game-col {
       flex: 1 1 240px;
       max-width: 290px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .game {
+      display: block;
       padding: 24px 20px 22px;
       border-radius: 28px;
       color: #fff;
@@ -88,6 +95,49 @@
       font-weight: bold;
     }
 
+    .ranking {
+      padding: 16px 18px 18px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, .08);
+      border: 2px solid rgba(255, 255, 255, .18);
+      text-align: left;
+    }
+
+    .ranking h3 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      color: #ffd93d;
+      text-align: center;
+    }
+
+    .ranking ol {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .ranking li {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 5px 0;
+      font-size: .95rem;
+    }
+
+    .ranking li + li { border-top: 1px solid rgba(255, 255, 255, .12); }
+
+    .ranking .place { flex: none; width: 1.6em; color: #a99fe0; }
+    .ranking .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .ranking .score { flex: none; font-weight: bold; font-variant-numeric: tabular-nums; }
+    .ranking .where { display: block; font-size: .78rem; font-weight: normal; color: #a99fe0; text-align: right; }
+
+    .ranking .note {
+      margin: 0;
+      font-size: .9rem;
+      color: #d9d2ff;
+      text-align: center;
+    }
+
     footer {
       margin-top: auto;
       padding-top: 48px;
@@ -104,6 +154,7 @@
   <h1>Alan's World</h1>
 
   <main class="games">
+    <div class="game-col">
     <a class="game tower" href="the-tower/">
       <svg viewBox="0 0 120 120" aria-hidden="true">
         <circle cx="94" cy="24" r="12" fill="#ffd93d"/>
@@ -117,7 +168,13 @@
       <h2>The Tower</h2>
       <span class="play">▶ Play</span>
     </a>
+    <section class="ranking" data-board="tower-scores" data-level="story">
+      <h3>🏆 Top climbers</h3>
+      <p class="note">Loading rankings…</p>
+    </section>
+    </div>
 
+    <div class="game-col">
     <a class="game alien" href="alien-boom-boom/">
       <svg viewBox="0 0 120 120" aria-hidden="true">
         <path d="M44 26 36 10M76 26l8-16" stroke="#1b1447" stroke-width="4" stroke-linecap="round"/>
@@ -133,8 +190,55 @@
       <h2>Alien Boom Boom</h2>
       <span class="play">▶ Play</span>
     </a>
+    <section class="ranking" data-board="scores" data-level="level">
+      <h3>🏆 Top pilots</h3>
+      <p class="note">Loading rankings…</p>
+    </section>
+    </div>
   </main>
 
   <footer>Made by Alan 🚀</footer>
+
+  <script>
+    // The games save their rankings in a shared online database; show the top five of each here.
+    const RANKINGS_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com";
+    const TOP = 5;
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      node.textContent = text;   // names are typed by players, so never treat them as HTML
+      return node;
+    }
+
+    async function showRanking(section) {
+      const note = section.querySelector(".note");
+      try {
+        const reply = await fetch(`${RANKINGS_URL}/${section.dataset.board}.json?orderBy=%22score%22&limitToLast=${TOP}`);
+        if (!reply.ok) throw new Error(reply.status);
+        const rows = Object.values(await reply.json() || {})
+          .filter(row => row && Number.isFinite(row.score))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, TOP);
+        if (!rows.length) {
+          note.textContent = "No scores yet. Be the first!";
+          return;
+        }
+        const list = document.createElement("ol");
+        rows.forEach((row, i) => {
+          const item = document.createElement("li");
+          const score = el("span", "score", row.score.toLocaleString());
+          score.append(el("span", "where", `${section.dataset.level} ${row.level}`));
+          item.append(el("span", "place", `${i + 1}.`), el("span", "name", String(row.name || "?")), score);
+          list.append(item);
+        });
+        note.replaceWith(list);
+      } catch (err) {
+        note.textContent = "Rankings can't be loaded right now.";
+      }
+    }
+
+    document.querySelectorAll(".ranking").forEach(showRanking);
+  </script>
 </body>
 </html>

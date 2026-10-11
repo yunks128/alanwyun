@@ -14,6 +14,12 @@ Climb 50 stories of ghosts, lava pools and flamethrowers. One touch and the run 
 | Q | swap weapons |
 | P | pause |
 
+## Rankings
+
+When a run ends you type a name and the score joins a ranking shared by every player
+(the same online database Alien Boom Boom uses). The top five also show on
+https://alanwyun.com. The database rules are in `firebase-rules.json` in the top folder.
+
 ## Run on your computer
 
 ```
