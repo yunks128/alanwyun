@@ -60,6 +60,8 @@ LEN_COSTS = [25, 50, 90, 140]
 SWORD_DMG = [2, 3, 5, 7, 10, 14]
 DMG_COSTS = [30, 60, 110, 170, 250]
 DOUBLE_COST = 80
+SHIELD_COST = 20       # the shield always costs this much, however high you climb
+SHIELD_GRACE = 1.2     # after the shield soaks a hit you are safe this long while you get clear
 GUNS = {
     "pistol": dict(name="Laser Pistol", cost=90, dmg=3, cooldown=0.8, color=(90, 255, 140)),
     "rifle": dict(name="Laser Rifle", cost=260, dmg=6, cooldown=0.5, color=(255, 90, 220)),
@@ -86,6 +88,7 @@ class Player:
         self.double = False
         self.guns = []
         self.weapon = "sword"
+        self.shield = False      # soaks up one hit, then it is gone
         self.place(40)
 
     def place(self, x):
@@ -97,6 +100,7 @@ class Player:
         self.cooldown = 0.0
         self.swing = 0.0
         self.swing_hits = []
+        self.invuln = 0.0
 
     @property
     def rect(self):
@@ -375,6 +379,19 @@ class Game:
         """The shared ranking when it is available, otherwise this device's own."""
         return self.scores if self.online is None else self.online
 
+    def hurt(self, cause):
+        """Take a hit. A shield soaks the first one up, so the next one is what ends the run."""
+        p = self.player
+        if p.invuln > 0:
+            return
+        if not p.shield:
+            return self.die(cause)
+        p.shield = False
+        p.invuln = SHIELD_GRACE
+        r = p.rect
+        self.burst(r.centerx, r.centery, (120, 220, 255), 26)
+        self.popups.append([r.centerx, r.top - 6, "Shield!", 1.0])
+
     def die(self, cause):
         r = self.player.rect
         self.burst(r.centerx, r.centery, (255, 140, 30), 30)
@@ -478,6 +495,13 @@ class Game:
         else:
             items.append(("Double strike", "OWNED", None, None, "One swing hits two ghosts at a time."))
 
+        if not p.shield:
+            items.append(("Shield", "", SHIELD_COST, lambda: setattr(p, "shield", True),
+                          "Soaks up one hit, so it takes two to end your run. One shield at a time."))
+        else:
+            items.append(("Shield", "OWNED", None, None,
+                          "Your shield is ready to soak up the next hit. You can only carry one."))
+
         for key, gun in GUNS.items():
             info = f"Shoots ghosts from a distance. Damage {gun['dmg']}, {gun['cooldown']}s between shots."
             if key not in p.guns:
@@ -528,16 +552,25 @@ class Game:
         p.move(direction * SPEED * dt, p.vy * dt, lv.solids)
         p.cooldown = max(0, p.cooldown - dt)
         p.swing = max(0, p.swing - dt)
+        p.invuln = max(0, p.invuln - dt)
 
         r = p.rect
 
-        # --- one touch of lava, flame or ghost ends the run
+        # --- one touch of lava, flame or ghost ends the run, unless a shield soaks it up
         if lv.pool and r.bottom > FLOOR_Y + LAVA_DEPTH:
-            return self.die("You fell in the lava.")
+            self.hurt("You fell in the lava.")
+            if self.state != "play":
+                return
+            # the shield held, so climb back out on the nearer side of the pool
+            p.place(lv.pool.left - PW - 6 if r.centerx < lv.pool.centerx else lv.pool.right + 6)
+            p.invuln = SHIELD_GRACE
+            return
         if lv.flame_x is not None:
             lv.flame_t += dt
             if lv.flame_phase == "on" and r.colliderect(lv.flame_rect.inflate(-8, 0)):
-                return self.die("A flamethrower roasted you.")
+                self.hurt("A flamethrower roasted you.")
+                if self.state != "play":
+                    return
 
         # --- attacking
         if keys[pygame.K_SPACE] and p.cooldown <= 0:
@@ -587,7 +620,11 @@ class Game:
             g.x = max(18, min(W - 18, g.x))
             g.y = max(CEIL_Y + 24, min(FLOOR_Y - 14, g.y))
             if g.rect.inflate(-10, -10).colliderect(r):
-                return self.die("A ghost got you.")
+                self.hurt("A ghost got you.")
+                if self.state != "play":
+                    return
+                g.kb = 240 * (1 if g.x >= r.centerx else -1)
+                break
 
         # --- effects
         for part in self.particles[:]:
@@ -844,6 +881,10 @@ class Game:
         if self.outcome == "dead" and self.state in ("name", "dead"):
             return
         r, f = p.rect, p.facing
+        if p.shield:
+            pygame.draw.ellipse(scr, (120, 220, 255), r.inflate(24, 18), 3)
+        elif p.invuln > 0 and math.sin(self.time * 28) > 0:
+            pygame.draw.ellipse(scr, (90, 150, 190), r.inflate(24, 18), 2)
         step = math.sin(self.time * 16) * 5 if p.moving and p.on_ground else 0
         pygame.draw.rect(scr, (44, 52, 96), (r.centerx - 9 + step, r.bottom - 12, 7, 12))
         pygame.draw.rect(scr, (44, 52, 96), (r.centerx + 2 - step, r.bottom - 12, 7, 12))
@@ -877,6 +918,13 @@ class Game:
             pygame.draw.rect(scr, (60, 62, 74), (x, hand[1] - 4, length, 7), border_radius=2)
             pygame.draw.rect(scr, color, (x + (length - 5 if f > 0 else 0), hand[1] - 4, 5, 7))
 
+    def shield_badge(self, center):
+        cx, cy = center
+        pts = [(cx, cy - 11), (cx + 9, cy - 6), (cx + 9, cy + 1), (cx, cy + 11),
+               (cx - 9, cy + 1), (cx - 9, cy - 6)]
+        pygame.draw.polygon(self.screen, (120, 220, 255), pts)
+        pygame.draw.polygon(self.screen, (40, 90, 120), pts, 2)
+
     def draw_hud(self):
         scr, p = self.screen, self.player
         pygame.draw.rect(scr, (40, 36, 54), (0, 0, W, CEIL_Y))
@@ -901,6 +949,9 @@ class Game:
             pygame.draw.rect(scr, (70, 64, 88), (530, 40, 120, 8), border_radius=3)
             ready = 1 - p.cooldown / gun["cooldown"]
             pygame.draw.rect(scr, gun["color"] if ready >= 1 else (150, 150, 160), (530, 40, 120 * ready, 8), border_radius=3)
+        if p.shield:
+            self.shield_badge((706, 32))
+            self.text("SHIELD", 22, (150, 225, 255), (722, 22))
         if p.guns:
             self.text("Q: swap weapon", 20, (170, 170, 190), (W - 18, 42), "topright")
 

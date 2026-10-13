@@ -1,6 +1,13 @@
 # The Tower
 
-Climb 50 stories of ghosts, lava pools and flamethrowers. One touch and the run is over.
+Climb 50 stories of ghosts, lava pools and flamethrowers. One touch and the run is over -
+unless you bought a shield.
+
+## Shop
+
+The shop opens every time you clear a story. Alongside the sword upgrades and laser guns
+there is a **shield for 20 coins**: it soaks up one hit, so it takes two to end your run.
+You can only carry one at a time, and the price never goes up however high you climb.
 
 **Play in the browser:** https://alanwyun.com/the-tower/
 
