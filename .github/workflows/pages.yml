@@ -31,12 +31,16 @@ jobs:
           cp the-tower/tower.py /tmp/web/the-tower/main.py
           cp the-tower/favicon.png /tmp/web/the-tower/
           python -m pygbag --build --title "The Tower" /tmp/web/the-tower
+          mkdir -p /tmp/web/junkyard
+          cp junkyard/junkyard.py /tmp/web/junkyard/main.py
+          python -m pygbag --build --title "Junkyard Nights" /tmp/web/junkyard
       - name: Put the home page and the games together
         run: |
           mkdir _site
           cp index.html CNAME .nojekyll _site/
           cp -r alien-boom-boom/build/web _site/alien-boom-boom
           cp -r /tmp/web/the-tower/build/web _site/the-tower
+          cp -r /tmp/web/junkyard/build/web _site/junkyard
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

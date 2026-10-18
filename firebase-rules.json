@@ -25,6 +25,19 @@
           ".validate": "$other === 'name' || $other === 'score' || $other === 'level'"
         }
       }
+    },
+    "junkyard-scores": {
+      ".read": true,
+      ".indexOn": [
+        "score"
+      ],
+      "$id": {
+        ".write": "!data.exists()",
+        ".validate": "newData.hasChildren(['name', 'score', 'level']) && newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() < 1000000 && newData.child('level').isNumber() && newData.child('level').val() >= 1 && newData.child('level').val() < 1000",
+        "$other": {
+          ".validate": "$other === 'name' || $other === 'score' || $other === 'level'"
+        }
+      }
     }
   }
 }

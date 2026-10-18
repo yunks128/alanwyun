@@ -36,7 +36,7 @@
       justify-content: center;
       gap: 28px;
       width: 100%;
-      max-width: 640px;
+      max-width: 960px;
     }
 
     .game-col {
@@ -72,6 +72,7 @@
 
     .tower { background: linear-gradient(160deg, #38b6ff, #2a62d8); }
     .alien { background: linear-gradient(160deg, #7be04f, #159a6c); }
+    .junk { background: linear-gradient(160deg, #b57bea, #5b2d8f); }
 
     .game svg {
       display: block;
@@ -192,6 +193,28 @@
     </a>
     <section class="ranking" data-board="scores" data-level="level">
       <h3>🏆 Top pilots</h3>
+      <p class="note">Loading rankings…</p>
+    </section>
+    </div>
+
+    <div class="game-col">
+    <a class="game junk" href="junkyard/">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <rect x="14" y="86" width="92" height="10" rx="5" fill="#1b1447" opacity=".4"/>
+        <path d="M26 54h22v30H26zM78 44h20v40H78z" fill="#3b3550"/>
+        <path d="M60 24c17 0 29 14 29 31 0 16-13 29-29 29S31 71 31 55c0-17 12-31 29-31z" fill="#c08ef0" stroke="#1b1447" stroke-width="4"/>
+        <ellipse cx="48" cy="54" rx="8" ry="10" fill="#1b1447"/>
+        <ellipse cx="72" cy="54" rx="8" ry="10" fill="#1b1447"/>
+        <circle cx="45" cy="50" r="3" fill="#fff"/>
+        <circle cx="69" cy="50" r="3" fill="#fff"/>
+        <path d="M14 30l26 26" stroke="#e8edf5" stroke-width="7" stroke-linecap="round"/>
+        <path d="M10 26l8 8" stroke="#ffd93d" stroke-width="9" stroke-linecap="round"/>
+      </svg>
+      <h2>Junkyard Nights</h2>
+      <span class="play">▶ Play</span>
+    </a>
+    <section class="ranking" data-board="junkyard-scores" data-level="wave">
+      <h3>🏆 Top scavengers</h3>
       <p class="note">Loading rankings…</p>
     </section>
     </div>
