@@ -38,6 +38,7 @@ GHOST_POINTS = 10
 STORY_POINTS = 50
 SCORE_KEY = "the-tower-scores"       # browser localStorage key used instead of the file
 MAX_RANKINGS = 5
+RANKING_POOL = 100     # rows pulled from the database before keeping one per name
 # Shared online ranking (Firebase Realtime Database, the same one Alien Boom Boom uses).
 # Leave the address empty to keep rankings on this device only.
 LEADERBOARD_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com"
@@ -250,9 +251,23 @@ def http(method, url, body=None):
         return None
 
 
+def best_per_name(rankings):
+    """One row per player, their best, so nobody can fill the whole ranking.
+
+    Names are matched ignoring case and spacing, and rows are (score, story, name),
+    so the plain tuple comparison keeps the highest score.
+    """
+    best = {}
+    for row in rankings:
+        key = " ".join(row[2].split()).lower()
+        if key not in best or row > best[key]:
+            best[key] = row
+    return sorted(best.values(), reverse=True)
+
+
 def fetch_online_rankings():
     """Top (score, story, name) rows from the shared ranking, best first, or None if it can't be reached."""
-    query = f"?orderBy=%22score%22&limitToLast={MAX_RANKINGS}"
+    query = f"?orderBy=%22score%22&limitToLast={RANKING_POOL}"
     try:
         rows = json.loads(http("GET", LEADERBOARD_URL + LEADERBOARD_PATH + query) or "")
     except ValueError:
@@ -265,7 +280,7 @@ def fetch_online_rankings():
     for row in rows.values():
         if isinstance(row, dict) and isinstance(row.get("score"), int) and isinstance(row.get("level"), int):
             rankings.append((row["score"], row["level"], str(row.get("name", "?"))[:MAX_NAME_LEN]))
-    return sorted(rankings, reverse=True)
+    return best_per_name(rankings)[:MAX_RANKINGS]
 
 
 class Game:
@@ -343,7 +358,7 @@ class Game:
         self.name = self.name.strip() or random.choice(FUN_NAMES)
         self.mine = (self.score, self.story, self.name)
         self.new_best = self.score > max((row[0] for row in self.scores), default=0)
-        self.scores = sorted(self.scores + [self.mine], reverse=True)[:MAX_RANKINGS]
+        self.scores = best_per_name(self.scores + [self.mine])[:MAX_RANKINGS]
         try:
             save = json.dumps({"scores": self.scores, "name": self.name})
             if WEB:

@@ -226,6 +226,20 @@
     // The games save their rankings in a shared online database; show the top five of each here.
     const RANKINGS_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com";
     const TOP = 5;
+    const POOL = 100;   // rows fetched before keeping one per name
+
+    // Keep only each player's best run, so one name can't fill the whole board.
+    function bestPerName(rows) {
+      const best = new Map();
+      for (const row of rows) {
+        const key = String(row.name || "?").trim().replace(/\s+/g, " ").toLowerCase();
+        const kept = best.get(key);
+        const better = !kept || row.score > kept.score ||
+          (row.score === kept.score && (row.level || 0) > (kept.level || 0));
+        if (better) best.set(key, row);
+      }
+      return [...best.values()];
+    }
 
     function el(tag, className, text) {
       const node = document.createElement(tag);
@@ -237,10 +251,10 @@
     async function showRanking(section) {
       const note = section.querySelector(".note");
       try {
-        const reply = await fetch(`${RANKINGS_URL}/${section.dataset.board}.json?orderBy=%22score%22&limitToLast=${TOP}`);
+        const reply = await fetch(`${RANKINGS_URL}/${section.dataset.board}.json?orderBy=%22score%22&limitToLast=${POOL}`);
         if (!reply.ok) throw new Error(reply.status);
-        const rows = Object.values(await reply.json() || {})
-          .filter(row => row && Number.isFinite(row.score))
+        const rows = bestPerName(Object.values(await reply.json() || {})
+            .filter(row => row && Number.isFinite(row.score)))
           .sort((a, b) => b.score - a.score)
           .slice(0, TOP);
         if (!rows.length) {

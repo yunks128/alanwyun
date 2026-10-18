@@ -82,6 +82,7 @@ COOLDOWN_PER_UPGRADE_MS = 45
 
 SAVE_PATH = Path(__file__).with_name("alien_boom_boom_save.json")
 MAX_RANKINGS = 10
+RANKING_POOL = 100  # rows pulled from the database before keeping one per name
 # Shared online ranking (Firebase Realtime Database). Paste the database address here, e.g.
 # "https://alien-boom-boom-default-rtdb.firebaseio.com". Leave it empty to keep rankings
 # on each device only.
@@ -216,9 +217,23 @@ def http(method, url, body=None):
         return None
 
 
+def best_per_name(rankings):
+    """One entry per player, their best, so nobody can fill the whole ranking.
+
+    Names are matched ignoring case and spacing.
+    """
+    best = {}
+    for entry in rankings:
+        key = " ".join(str(entry["name"]).split()).lower()
+        rank = (entry["score"], entry["level"])
+        if key not in best or rank > (best[key]["score"], best[key]["level"]):
+            best[key] = entry
+    return sorted(best.values(), key=lambda entry: (entry["score"], entry["level"]), reverse=True)
+
+
 def fetch_online_rankings():
     """Top scores from the shared ranking, best first, or None if it can't be reached."""
-    query = f"/scores.json?orderBy=%22score%22&limitToLast={MAX_RANKINGS}"
+    query = f"/scores.json?orderBy=%22score%22&limitToLast={RANKING_POOL}"
     try:
         rows = json.loads(http("GET", LEADERBOARD_URL + query) or "")
     except ValueError:
@@ -231,8 +246,7 @@ def fetch_online_rankings():
     for row in rows.values():
         if isinstance(row, dict) and isinstance(row.get("score"), int) and isinstance(row.get("level"), int):
             rankings.append({"name": str(row.get("name", "?"))[:MAX_NAME_LEN], "score": row["score"], "level": row["level"]})
-    rankings.sort(key=lambda entry: entry["score"], reverse=True)
-    return rankings
+    return best_per_name(rankings)[:MAX_RANKINGS]
 
 
 class Game:
@@ -731,9 +745,7 @@ class App:
     def save_ranking(self):
         name = self.name.strip() or random.choice(FUN_NAMES)
         self.my_entry = {"name": name, "score": self.game.score, "level": self.game.level}
-        rankings = self.save["rankings"] + [self.my_entry]
-        rankings.sort(key=lambda entry: entry["score"], reverse=True)
-        self.save["rankings"] = rankings[:MAX_RANKINGS]
+        self.save["rankings"] = best_per_name(self.save["rankings"] + [self.my_entry])[:MAX_RANKINGS]
         self.save["last_name"] = name
         write_save(self.save)
         self.refresh_online(self.my_entry)
