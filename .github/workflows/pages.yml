@@ -34,6 +34,9 @@ jobs:
           mkdir -p /tmp/web/junkyard
           cp junkyard/junkyard.py /tmp/web/junkyard/main.py
           python -m pygbag --build --title "Junkyard Nights" /tmp/web/junkyard
+          mkdir -p /tmp/web/ravens
+          cp ravens/ravens.py /tmp/web/ravens/main.py
+          python -m pygbag --build --title "Ravens from the Underworld" /tmp/web/ravens
       - name: Put the home page and the games together
         run: |
           mkdir _site
@@ -41,6 +44,7 @@ jobs:
           cp -r alien-boom-boom/build/web _site/alien-boom-boom
           cp -r /tmp/web/the-tower/build/web _site/the-tower
           cp -r /tmp/web/junkyard/build/web _site/junkyard
+          cp -r /tmp/web/ravens/build/web _site/ravens
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
