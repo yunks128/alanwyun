@@ -27,6 +27,9 @@ When a run ends you type a name and the score joins a ranking shared by every pl
 (the same online database Alien Boom Boom uses). The top five also show on
 https://alanwyun.com. The database rules are in `firebase-rules.json` in the top folder.
 
+The game-over screen shows the top 20, four at a time - scroll with Up / Down,
+Page Up / Page Down or the mouse wheel. It starts on your own row.
+
 ## Run on your computer
 
 ```

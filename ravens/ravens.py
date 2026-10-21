@@ -6,11 +6,13 @@ Controls
     P or Esc              pause
 
 Ravens climb out of the burning hole at the bottom right, settle into the sky
-and drop pellets on you. Three pellets is all it takes. Rockets only go
-straight up, so you have to stand under a raven to get it - and the blast
-takes out anything else close by, pellets included.
+and drop pellets on you. Touching a raven hurts just as much as a pellet, and
+three hits is all it takes. Rockets only go straight up, so you have to stand
+under a raven to get it - and the blast takes out anything else close by,
+pellets included.
 
-Every wave the ravens fly a little faster.
+Every wave the ravens fly a little faster. Clear a wave and you pick an
+upgrade - faster shooting, bigger blasts, more rockets at once and so on.
 
 When a run ends you type a name, and your score joins the ranking shared by every player.
 """
@@ -58,12 +60,26 @@ PELLET_R = 5
 # the edge of it - keep it inside the player's half-width or every shot misses.
 PELLET_AIM = 11
 
+# Upgrades offered between waves: key -> (name, what it does, most times you can take it)
+UPGRADES = {
+    "reload": ("Quick Reload", "shoot faster", 6),
+    "blast": ("Bigger Boom", "wider explosions", 4),
+    "rocket": ("Fast Rockets", "rockets fly quicker", 4),
+    "multi": ("Double Shot", "one more rocket per shot", 2),
+    "feet": ("Fast Feet", "run quicker", 4),
+    "heal": ("Patch Up", "get a life back", 99),
+}
+UPGRADE_CHOICES = 3
+UPGRADE_KEY_DELAY = 0.6   # so a mashed space bar doesn't pick for you
+MULTI_SPREAD = 16         # gap between rockets fired together
+
 RAVEN_POINTS = 15
 WAVE_BONUS = 50
 
 SCORE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ravens_scores.json")
 SCORE_KEY = "ravens-scores"        # browser localStorage key used instead of the file
-MAX_RANKINGS = 5
+MAX_RANKINGS = 20
+VISIBLE_RANKINGS = 5   # rows shown at once on the game-over screen; the rest scroll
 RANKING_POOL = 100     # rows pulled from the database before keeping one per name
 MAX_NAME_LEN = 16
 NAME_KEY_DELAY = 0.5   # keys mashed while dying are ignored this long on the name screen
@@ -236,13 +252,14 @@ class Rocket:
 
 
 class Blast:
-    def __init__(self, x, y):
+    def __init__(self, x, y, size):
         self.x, self.y = float(x), float(y)
+        self.size = size
         self.life = BLAST_TIME
 
     @property
     def radius(self):
-        return BLAST_R * (1 - (self.life / BLAST_TIME) ** 2) ** 0.5
+        return self.size * (1 - (self.life / BLAST_TIME) ** 2) ** 0.5
 
 
 class Pellet:
@@ -284,6 +301,28 @@ class Player:
         self.grace = 0.0
         self.step = 0.0
         self.recoil = 0.0
+        self.levels = {key: 0 for key in UPGRADES}
+
+    # what the upgrades add up to
+    @property
+    def reload(self):
+        return ROCKET_COOLDOWN * 0.8 ** self.levels["reload"]
+
+    @property
+    def blast_r(self):
+        return BLAST_R + 16 * self.levels["blast"]
+
+    @property
+    def rocket_speed(self):
+        return ROCKET_SPEED * (1 + 0.25 * self.levels["rocket"])
+
+    @property
+    def shots(self):
+        return 1 + self.levels["multi"]
+
+    @property
+    def speed(self):
+        return SPEED * (1 + 0.12 * self.levels["feet"])
 
     @property
     def y(self):
@@ -310,7 +349,12 @@ class Game:
         self.blast_glow = make_glow(110, (255, 190, 90), 1.0)
         self.fonts = {}
         self.time = 0.0
-        self.state = "title"           # title, play, name, dead
+        self.state = "title"           # title, play, upgrade, name, dead
+        self.choices = []
+        self.pick = 0
+        self.upgrade_time = 0.0
+        self.scroll = 0                # first leaderboard row shown
+        self.scroll_follow = True      # keep your own row in view until you scroll yourself
         self.name = ""
         self.name_fresh = False
         self.name_time = 0.0
@@ -346,6 +390,29 @@ class Game:
         self.to_spawn = 2 + self.wave * 2
         self.spawn_timer = 0.8
         self.say(f"WAVE {self.wave}" if self.wave == 1 else f"WAVE {self.wave}  -  FASTER")
+
+    def offer_upgrades(self):
+        """Wave cleared: stop and let the player choose an upgrade."""
+        p = self.player
+        ready = [key for key, (_, _, most) in UPGRADES.items()
+                 if p.levels[key] < most and (key != "heal" or p.lives < LIVES)]
+        self.choices = random.sample(ready, min(UPGRADE_CHOICES, len(ready)))
+        if not self.choices:
+            self.start_wave()
+            return
+        self.pick = 0
+        self.upgrade_time = self.time
+        self.pellets.clear()
+        self.state = "upgrade"
+
+    def take_upgrade(self, key):
+        p = self.player
+        if key == "heal":
+            p.lives = min(LIVES, p.lives + 1)
+        else:
+            p.levels[key] += 1
+        self.state = "play"
+        self.start_wave()
 
     def say(self, msg):
         self.banner, self.banner_t = msg, 1.8
@@ -402,6 +469,8 @@ class Game:
         except Exception:
             pass       # a high score is never worth crashing over
         self.refresh_online({"name": self.name, "score": self.score, "level": self.wave})
+        self.scroll = 0
+        self.scroll_follow = True
         self.state = "dead"
 
     def refresh_online(self, new_entry=None):
@@ -436,6 +505,19 @@ class Game:
         elif self.state == "play":
             if key in (pygame.K_p, pygame.K_ESCAPE):
                 self.paused = not self.paused
+        elif self.state == "upgrade":
+            if self.time - self.upgrade_time < UPGRADE_KEY_DELAY:
+                return
+            number = {pygame.K_1: 0, pygame.K_2: 1, pygame.K_3: 2,
+                      pygame.K_KP1: 0, pygame.K_KP2: 1, pygame.K_KP3: 2}.get(key)
+            if number is not None and number < len(self.choices):
+                self.take_upgrade(self.choices[number])
+            elif key == pygame.K_LEFT:
+                self.pick = (self.pick - 1) % len(self.choices)
+            elif key == pygame.K_RIGHT:
+                self.pick = (self.pick + 1) % len(self.choices)
+            elif confirm:
+                self.take_upgrade(self.choices[self.pick])
         elif self.state == "name":
             if self.time - self.name_time < NAME_KEY_DELAY:
                 return                  # ignore whatever was being mashed as you died
@@ -453,7 +535,15 @@ class Game:
                     self.name_fresh = False
                 self.name = (self.name + char)[:MAX_NAME_LEN]
         elif self.state == "dead":
-            if confirm:
+            if key == pygame.K_UP:
+                self.scroll_rankings(-1)
+            elif key == pygame.K_DOWN:
+                self.scroll_rankings(1)
+            elif key == pygame.K_PAGEUP:
+                self.scroll_rankings(-VISIBLE_RANKINGS)
+            elif key == pygame.K_PAGEDOWN:
+                self.scroll_rankings(VISIBLE_RANKINGS)
+            elif confirm:
                 self.new_run()
                 self.state = "play"
             elif key in (pygame.K_ESCAPE, pygame.K_q):
@@ -462,6 +552,13 @@ class Game:
                     self.state = "title"
                 else:
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
+
+    def scroll_rankings(self, rows):
+        if self.state != "dead":
+            return
+        most = max(0, len(self.rankings()[:MAX_RANKINGS]) - VISIBLE_RANKINGS)
+        self.scroll = clamp(self.scroll + rows, 0, most)
+        self.scroll_follow = False
 
     # ---------------------------------------------------------------- update
 
@@ -476,7 +573,7 @@ class Game:
         # --- walking
         direction = (1 if keys[pygame.K_RIGHT] else 0) - (1 if keys[pygame.K_LEFT] else 0)
         if direction:
-            p.x = clamp(p.x + direction * SPEED * dt, 8, W - PW - 8)
+            p.x = clamp(p.x + direction * p.speed * dt, 8, W - PW - 8)
             p.step += dt
         p.cooldown = max(0, p.cooldown - dt)
         p.grace = max(0, p.grace - dt)
@@ -484,9 +581,11 @@ class Game:
 
         # --- firing straight up
         if keys[pygame.K_SPACE] and p.cooldown <= 0:
-            p.cooldown = ROCKET_COOLDOWN
+            p.cooldown = p.reload
             p.recoil = 1.0
-            self.rockets.append(Rocket(*p.muzzle))
+            mx, my = p.muzzle
+            for i in range(p.shots):
+                self.rockets.append(Rocket(mx + (i - (p.shots - 1) / 2) * MULTI_SPREAD, my))
 
         self.move_rockets(dt)
         self.move_ravens(dt)
@@ -500,13 +599,13 @@ class Game:
                 self.to_spawn -= 1
                 self.spawn_timer = max(0.28, 0.95 - self.wave * 0.04)
 
-        if not self.to_spawn and not self.ravens:
+        if self.state == "play" and not self.to_spawn and not self.ravens:
             self.score += WAVE_BONUS
-            self.start_wave()
+            self.offer_upgrades()
 
     def move_rockets(self, dt):
         for rocket in self.rockets[:]:
-            rocket.y -= ROCKET_SPEED * dt
+            rocket.y -= self.player.rocket_speed * dt
             rocket.trail += dt
             hit = next((r for r in self.ravens if r.rect.colliderect(rocket.rect)), None)
             if hit or rocket.y <= HUD_H + 6:
@@ -514,16 +613,17 @@ class Game:
                 self.explode(rocket.x, rocket.y)
 
     def explode(self, x, y):
-        self.blasts.append(Blast(x, y))
+        reach = self.player.blast_r
+        self.blasts.append(Blast(x, y, reach))
         self.shake = 0.5
         self.burst(x, y, EMBER, 26)
         caught = [r for r in self.ravens
-                  if math.hypot(r.center[0] - x, r.center[1] - y) <= BLAST_R + RAVEN_H / 2]
+                  if math.hypot(r.center[0] - x, r.center[1] - y) <= reach + RAVEN_H / 2]
         for raven in caught:
             self.kill(raven)
         # the blast clears pellets too, which is what makes standing your ground worth it
         for pellet in self.pellets[:]:
-            if math.hypot(pellet.x - x, pellet.y - y) <= BLAST_R:
+            if math.hypot(pellet.x - x, pellet.y - y) <= reach:
                 self.pellets.remove(pellet)
                 self.burst(pellet.x, pellet.y, (150, 130, 160), 5)
         if len(caught) > 1:
@@ -543,6 +643,12 @@ class Game:
         p = self.player
         for raven in self.ravens:
             raven.flap += dt * 11
+            # ravens are not to be touched - bumping one hurts like a pellet
+            # (a little forgiving round the edges, where the drawing is just wingtip)
+            if p.grace <= 0 and raven.rect.inflate(-8, -6).colliderect(p.rect):
+                self.hurt()
+                if self.state != "play":
+                    return
             if raven.rising:
                 # climb out of the hole and drift left into the sky
                 raven.y -= RISE_SPEED * dt
@@ -660,6 +766,8 @@ class Game:
             self.text(self.banner, 58, (255, 214, 180), (W // 2, HUD_H + 64), "center")
         if self.state == "title":
             self.draw_title()
+        elif self.state == "upgrade":
+            self.draw_upgrades()
         elif self.state == "name":
             self.draw_name()
         elif self.state == "dead":
@@ -763,7 +871,7 @@ class Game:
         self.text("ROCKET", 18, (150, 132, 140), (560, 8))
         bar = pygame.Rect(560, 26, 130, 9)
         pygame.draw.rect(scr, (56, 44, 52), bar, border_radius=4)
-        ready = 1 - p.cooldown / ROCKET_COOLDOWN
+        ready = 1 - p.cooldown / p.reload
         pygame.draw.rect(scr, (120, 255, 150) if ready >= 1 else (210, 120, 70),
                          (bar.x, bar.y, bar.w * ready, bar.h), border_radius=4)
 
@@ -791,12 +899,14 @@ class Game:
         lines = [
             ("Left / Right", "run along the ground"),
             ("Space", "fire a rocket straight up"),
-            ("Watch out", "ravens drop pellets - three of them and you are done"),
+            ("Watch out", "ravens drop pellets - three hits and you are done"),
+            ("Don't touch", "the ravens - bumping one hurts too"),
             ("The blast", "kills every raven near it, and wipes out pellets"),
+            ("Clear a wave", "pick an upgrade, like faster shooting"),
             ("P", "pause"),
         ]
         for i, (key, what) in enumerate(lines):
-            y = 252 + i * 40
+            y = 240 + i * 31
             self.text(key, 30, (255, 214, 120), (W // 2 - 30, y), "topright")
             self.text(what, 27, (218, 212, 220), (W // 2 - 4, y + 3))
         self.text("Every wave they fly a little faster.", 26, (176, 160, 172), (W // 2, 462), "center")
@@ -806,6 +916,31 @@ class Game:
                       26, (255, 214, 120), (W // 2, 492), "center")
         glow = 150 + int(80 * (0.5 + 0.5 * math.sin(self.time * 3)))
         self.text("Press SPACE to begin", 40, (255, glow, glow // 2), (W // 2, 540), "center")
+
+    def draw_upgrades(self):
+        self.dim()
+        self.text(f"WAVE {self.wave} CLEARED", 64, (150, 230, 160), (W // 2, 120), "center")
+        self.text("Pick an upgrade", 32, (214, 206, 212), (W // 2, 176), "center")
+        p = self.player
+        card_w, gap = 250, 26
+        left = W // 2 - (len(self.choices) * card_w + (len(self.choices) - 1) * gap) // 2
+        for i, key in enumerate(self.choices):
+            name, what, most = UPGRADES[key]
+            card = pygame.Rect(left + i * (card_w + gap), 216, card_w, 190)
+            chosen = i == self.pick
+            pygame.draw.rect(self.screen, (44, 30, 40) if chosen else (28, 20, 26), card, border_radius=10)
+            pygame.draw.rect(self.screen, (255, 214, 120) if chosen else (90, 70, 84), card,
+                             3 if chosen else 2, border_radius=10)
+            self.text(i + 1, 40, EMBER, (card.centerx, card.top + 30), "center")
+            self.text(name, 34, BONE, (card.centerx, card.top + 76), "center")
+            self.text(what, 25, (200, 188, 198), (card.centerx, card.top + 112), "center")
+            if key == "heal":
+                status = f"lives {p.lives} / {LIVES}"
+            else:
+                status = f"level {p.levels[key]} / {most}"
+            self.text(status, 23, (150, 132, 140), (card.centerx, card.top + 156), "center")
+        self.text("Press 1, 2 or 3  -  or Left / Right and Space", 28, (186, 174, 184),
+                  (W // 2, 450), "center")
 
     def draw_name(self):
         self.dim()
@@ -837,14 +972,27 @@ class Game:
         if not rows:
             self.text("No scores yet. You are the first!", 28, (255, 170, 90),
                       (W // 2, 286), "center")
-        marked = False
-        for i, row in enumerate(rows):
-            score, wave, name = row
-            mine = not marked and row == self.mine
-            marked = marked or mine
+        most = max(0, len(rows) - VISIBLE_RANKINGS)
+        if self.scroll_follow and self.mine in rows:
+            # the shared ranking can arrive late, so keep re-centring on your row
+            self.scroll = rows.index(self.mine) - VISIBLE_RANKINGS // 2
+        self.scroll = clamp(self.scroll, 0, most)
+        mine_at = rows.index(self.mine) if self.mine in rows else -1
+        for i in range(self.scroll, min(len(rows), self.scroll + VISIBLE_RANKINGS)):
+            score, wave, name = rows[i]
             self.text(f"{i + 1}.   {name or '?'}   {score} points   (wave {wave})", 27,
-                      (255, 214, 120) if mine else (210, 202, 212),
-                      (W // 2, 272 + i * 29), "center")
+                      (255, 214, 120) if i == mine_at else (210, 202, 212),
+                      (W // 2, 272 + (i - self.scroll) * 29), "center")
+        if most:
+            # a scroll bar beside the list, and a hint for how to move it
+            track = pygame.Rect(W // 2 + 300, 260, 6, VISIBLE_RANKINGS * 29 - 4)
+            pygame.draw.rect(self.screen, (56, 44, 52), track, border_radius=3)
+            thumb_h = max(14, track.h * VISIBLE_RANKINGS // len(rows))
+            thumb_y = track.y + (track.h - thumb_h) * self.scroll // most
+            pygame.draw.rect(self.screen, (255, 214, 120), (track.x, thumb_y, track.w, thumb_h),
+                             border_radius=3)
+            self.text("Up / Down or mouse wheel to scroll", 22, (150, 132, 140),
+                      (W // 2, 272 + VISIBLE_RANKINGS * 29 - 6), "center")
         glow = 150 + int(80 * (0.5 + 0.5 * math.sin(self.time * 3)))
         self.text("Press SPACE to go again", 36, (255, glow, glow // 2), (W // 2, 452), "center")
         self.text("Esc to leave" if not WEB else "Esc for the title",
@@ -865,6 +1013,8 @@ async def main():
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 game.on_key(event.key, event.unicode)
+            if event.type == pygame.MOUSEWHEEL:
+                game.scroll_rankings(-event.y)
         game.update(dt, pygame.key.get_pressed())
         game.draw()
         pygame.display.flip()

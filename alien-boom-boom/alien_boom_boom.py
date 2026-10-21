@@ -81,7 +81,9 @@ SPEED_PER_UPGRADE = 1.5
 COOLDOWN_PER_UPGRADE_MS = 45
 
 SAVE_PATH = Path(__file__).with_name("alien_boom_boom_save.json")
-MAX_RANKINGS = 10
+MAX_RANKINGS = 20
+VISIBLE_RANKINGS = 10  # rows shown at once on the rankings screen; the rest scroll
+RANKING_ROW_H = 34
 RANKING_POOL = 100  # rows pulled from the database before keeping one per name
 # Shared online ranking (Firebase Realtime Database). Paste the database address here, e.g.
 # "https://alien-boom-boom-default-rtdb.firebaseio.com". Leave it empty to keep rankings
@@ -660,6 +662,9 @@ class App:
         self.earned = 0
         self.my_entry = None  # the ranking row from the game just played
         self.online_rankings = None  # shared ranking once it has been downloaded
+        self.scroll = 0  # first row shown on the rankings screen
+        self.scroll_follow = True  # keep your own row in view until you scroll yourself
+        self.drag_y = None  # where a finger dragging the rankings was last
         self.refresh_online()
         self.running = True
         self.touch_x = 0  # where the finger was last, to measure swipes
@@ -749,7 +754,16 @@ class App:
         self.save["last_name"] = name
         write_save(self.save)
         self.refresh_online(self.my_entry)
+        self.scroll = 0
+        self.scroll_follow = True
         self.state = "rankings"
+
+    def scroll_rankings(self, rows):
+        if self.state != "rankings":
+            return
+        most = max(0, len(self.rankings()[:MAX_RANKINGS]) - VISIBLE_RANKINGS)
+        self.scroll = min(max(self.scroll + rows, 0), most)
+        self.scroll_follow = False
 
     # ----- input -----
 
@@ -773,6 +787,15 @@ class App:
                         self.last_tap = (-DOUBLE_TAP_MS, 0, 0)  # a third tap starts over
                     else:
                         self.last_tap = (now, *event.pos)
+                elif self.state == "rankings":
+                    self.drag_y = event.pos[1]  # dragging the list scrolls it
+        elif event.type == pygame.MOUSEWHEEL:
+            self.scroll_rankings(-event.y)
+        elif event.type == pygame.MOUSEMOTION and self.drag_y is not None:
+            steps = int((self.drag_y - event.pos[1]) / RANKING_ROW_H)
+            if steps:
+                self.scroll_rankings(steps)
+                self.drag_y -= steps * RANKING_ROW_H
         elif event.type == pygame.MOUSEMOTION:
             if self.state == "play" and self.game.touching and not self.game.game_over:
                 self.game.player.x += round((event.pos[0] - self.touch_x) * SWIPE_SPEED)
@@ -780,6 +803,7 @@ class App:
                 self.touch_x = event.pos[0]
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             self.game.touching = False
+            self.drag_y = None
         elif event.type == pygame.KEYDOWN:
             self.handle_key(event, now)
 
@@ -817,7 +841,15 @@ class App:
                     self.name_fresh = False
                 self.name = (self.name + event.unicode)[:MAX_NAME_LEN]
         elif self.state == "rankings":
-            if key in (pygame.K_RETURN, pygame.K_SPACE):
+            if key == pygame.K_UP:
+                self.scroll_rankings(-1)
+            elif key == pygame.K_DOWN:
+                self.scroll_rankings(1)
+            elif key == pygame.K_PAGEUP:
+                self.scroll_rankings(-VISIBLE_RANKINGS)
+            elif key == pygame.K_PAGEDOWN:
+                self.scroll_rankings(VISIBLE_RANKINGS)
+            elif key in (pygame.K_RETURN, pygame.K_SPACE):
                 self.start_game()
             elif key == pygame.K_ESCAPE:
                 self.state = "menu"
@@ -840,12 +872,14 @@ class App:
         if enabled:
             self.buttons.append((rect, action))
 
-    def draw_rankings(self, top, limit):
+    def draw_rankings(self, top, limit, start=0, shown=None):
+        """Draw `shown` rows of the top `limit`, beginning at row `start`."""
         rankings = self.rankings()[:limit]
         if not rankings:
             self.text("No scores yet - be the first!", (WIDTH // 2, top + 20), self.small_font, GRAY)
-        for i, entry in enumerate(rankings):
-            y = top + i * 34
+        for i in range(start, min(len(rankings), start + (shown or limit))):
+            entry = rankings[i]
+            y = top + (i - start) * RANKING_ROW_H
             mine = entry == self.my_entry
             color = YELLOW if mine else WHITE
             if mine:
@@ -954,7 +988,22 @@ class App:
         self.text("RANKINGS", (WIDTH // 2, 80), self.big_font, YELLOW)
         where = "Saved on this device" if self.online_rankings is None else "Shared with every player"
         self.text(where, (WIDTH // 2, 128), self.small_font, GRAY)
-        self.draw_rankings(150, MAX_RANKINGS)
+        rows = self.rankings()[:MAX_RANKINGS]
+        most = max(0, len(rows) - VISIBLE_RANKINGS)
+        if self.scroll_follow and self.my_entry in rows:
+            # the shared ranking can arrive late, so keep re-centring on your row
+            self.scroll = rows.index(self.my_entry) - VISIBLE_RANKINGS // 2
+        self.scroll = min(max(self.scroll, 0), most)
+        self.draw_rankings(150, MAX_RANKINGS, self.scroll, VISIBLE_RANKINGS)
+        if most:
+            # a scroll bar beside the list, and a hint for how to move it
+            track = pygame.Rect(WIDTH - 52, 146, 6, VISIBLE_RANKINGS * RANKING_ROW_H - 4)
+            pygame.draw.rect(self.screen, NAVY, track, border_radius=3)
+            thumb_h = max(14, track.h * VISIBLE_RANKINGS // len(rows))
+            thumb_y = track.y + (track.h - thumb_h) * self.scroll // most
+            pygame.draw.rect(self.screen, YELLOW, (track.x, thumb_y, track.w, thumb_h), border_radius=3)
+            self.text("Drag, mouse wheel or Up / Down to scroll",
+                      (WIDTH // 2, 150 + VISIBLE_RANKINGS * RANKING_ROW_H + 14), self.small_font, GRAY)
         self.button("PLAY AGAIN", pygame.Rect(70, HEIGHT - 190, 220, 60), self.start_game)
         self.button("SHOP", pygame.Rect(310, HEIGHT - 190, 220, 60), lambda: self.go("shop"), CYAN)
         self.button("MENU", pygame.Rect(190, HEIGHT - 110, 220, 54), lambda: self.go("menu"), ORANGE)

@@ -38,7 +38,8 @@ LIVES = 3
 
 SCORE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "junkyard_scores.json")
 SCORE_KEY = "junkyard-scores"      # browser localStorage key used instead of the file
-MAX_RANKINGS = 5
+MAX_RANKINGS = 20
+VISIBLE_RANKINGS = 5   # rows shown at once on the game-over screen; the rest scroll
 RANKING_POOL = 100     # rows pulled from the database before keeping one per name
 MAX_NAME_LEN = 16
 NAME_KEY_DELAY = 0.5   # keys mashed while dying are ignored this long on the name screen
@@ -391,6 +392,8 @@ class Game:
         self.fonts = {}
         self.time = 0.0
         self.state = "title"           # title, play, name, dead
+        self.scroll = 0                # first leaderboard row shown
+        self.scroll_follow = True
         self.name = ""
         self.name_fresh = False        # True while the name is an untouched suggestion
         self.name_time = 0.0
@@ -477,6 +480,8 @@ class Game:
         except Exception:
             pass       # a high score is never worth crashing over
         self.refresh_online({"name": self.name, "score": self.score, "level": self.wave})
+        self.scroll = 0
+        self.scroll_follow = True      # keep your own row in view until you scroll yourself
         self.state = "dead"
 
     def refresh_online(self, new_entry=None):
@@ -532,7 +537,15 @@ class Game:
                     self.name_fresh = False
                 self.name = (self.name + char)[:MAX_NAME_LEN]
         elif self.state == "dead":
-            if confirm:
+            if key == pygame.K_UP:
+                self.scroll_rankings(-1)
+            elif key == pygame.K_DOWN:
+                self.scroll_rankings(1)
+            elif key == pygame.K_PAGEUP:
+                self.scroll_rankings(-VISIBLE_RANKINGS)
+            elif key == pygame.K_PAGEDOWN:
+                self.scroll_rankings(VISIBLE_RANKINGS)
+            elif confirm:
                 self.new_run()
                 self.state = "play"
             elif key in (pygame.K_ESCAPE, pygame.K_q):
@@ -541,6 +554,13 @@ class Game:
                     self.state = "title"
                 else:
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
+
+    def scroll_rankings(self, rows):
+        if self.state != "dead":
+            return
+        most = max(0, len(self.rankings()[:MAX_RANKINGS]) - VISIBLE_RANKINGS)
+        self.scroll = clamp(self.scroll + rows, 0, most)
+        self.scroll_follow = False
 
     # ---------------------------------------------------------------- update
 
@@ -1072,14 +1092,27 @@ class Game:
         if not rows:
             self.text("No scores yet. You are the first!", 28, (206, 170, 240),
                       (W // 2, 286), "center")
-        marked = False
-        for i, row in enumerate(rows):
-            score, wave, name = row
-            mine = not marked and row == self.mine
-            marked = marked or mine
+        most = max(0, len(rows) - VISIBLE_RANKINGS)
+        if self.scroll_follow and self.mine in rows:
+            # the shared ranking can arrive late, so keep re-centring on your row
+            self.scroll = rows.index(self.mine) - VISIBLE_RANKINGS // 2
+        self.scroll = clamp(self.scroll, 0, most)
+        mine_at = rows.index(self.mine) if self.mine in rows else -1
+        for i in range(self.scroll, min(len(rows), self.scroll + VISIBLE_RANKINGS)):
+            score, wave, name = rows[i]
             self.text(f"{i + 1}.   {name or '?'}   {score} points   (wave {wave})", 27,
-                      (255, 226, 130) if mine else (204, 208, 222),
-                      (W // 2, 272 + i * 29), "center")
+                      (255, 226, 130) if i == mine_at else (204, 208, 222),
+                      (W // 2, 272 + (i - self.scroll) * 29), "center")
+        if most:
+            # a scroll bar beside the list, and a hint for how to move it
+            track = pygame.Rect(W // 2 + 300, 260, 6, VISIBLE_RANKINGS * 29 - 4)
+            pygame.draw.rect(self.screen, (50, 54, 66), track, border_radius=3)
+            thumb_h = max(14, track.h * VISIBLE_RANKINGS // len(rows))
+            thumb_y = track.y + (track.h - thumb_h) * self.scroll // most
+            pygame.draw.rect(self.screen, (255, 226, 130), (track.x, thumb_y, track.w, thumb_h),
+                             border_radius=3)
+            self.text("Up / Down or mouse wheel to scroll", 22, (150, 156, 166),
+                      (W // 2, 272 + VISIBLE_RANKINGS * 29 - 6), "center")
         glow = 150 + int(80 * (0.5 + 0.5 * math.sin(self.time * 3)))
         self.text("Press SPACE to go back in", 36, (glow, glow, 255 - glow // 3),
                   (W // 2, 452), "center")
@@ -1101,6 +1134,8 @@ async def main():
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 game.on_key(event.key, event.unicode)
+            if event.type == pygame.MOUSEWHEEL:
+                game.scroll_rankings(-event.y)
         game.update(dt, pygame.key.get_pressed())
         game.draw()
         pygame.display.flip()

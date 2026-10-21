@@ -9,6 +9,8 @@ A rocket-versus-aliens arcade game made with Python and pygame.
 - **Arrow keys** move your rocket, **Space** shoots, **B** fires a bomb, **Esc** goes back to the menu.
 - Aliens park at the top and shoot red lasers. You have three lives.
 - Every third level has a boss. It drops coins when it dies; spend them in the shop.
+- The rankings screen holds the top 20, ten at a time - drag the list, use the mouse
+  wheel or Up / Down to scroll. It starts on your own row.
 
 A keyboard is needed, so it does not work on phones.
 

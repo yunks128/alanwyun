@@ -46,6 +46,9 @@ player (the same online database the other two games use). The database rules
 are in `firebase-rules.json` in the top folder, and the `junkyard-scores`
 section of them has to be live before scores can be posted.
 
+The game-over screen shows the top 20, five at a time - scroll with Up / Down,
+Page Up / Page Down or the mouse wheel. It starts on your own row.
+
 ## Run on your computer
 
 ```
@@ -53,5 +56,5 @@ pip install -r requirements.txt
 python junkyard.py
 ```
 
-Your own top five are kept in `junkyard_scores.json` next to the game (in the
+Your own top twenty are kept in `junkyard_scores.json` next to the game (in the
 browser they go to the page's own storage instead).
