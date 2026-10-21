@@ -114,8 +114,20 @@
 
     .ranking ol {
       margin: 0;
-      padding: 0;
+      padding: 0 6px 0 0;
       list-style: none;
+      max-height: 16rem;   /* about five rows; the rest of the top 20 scroll */
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #a99fe0 transparent;
+    }
+
+    .ranking .more {
+      margin: 8px 0 0;
+      font-size: .78rem;
+      color: #a99fe0;
+      text-align: center;
     }
 
     .ranking li {
@@ -247,9 +259,9 @@
   <footer>Made by Alan 🚀</footer>
 
   <script>
-    // The games save their rankings in a shared online database; show the top five of each here.
+    // The games save their rankings in a shared online database; show the top 20 of each here.
     const RANKINGS_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com";
-    const TOP = 5;
+    const TOP = 20;
     const POOL = 100;   // rows fetched before keeping one per name
 
     // Keep only each player's best run, so one name can't fill the whole board.
@@ -294,6 +306,9 @@
           list.append(item);
         });
         note.replaceWith(list);
+        if (list.scrollHeight > list.clientHeight) {
+          section.append(el("p", "more", `Scroll for all ${rows.length} ↓`));
+        }
       } catch (err) {
         note.textContent = "Rankings can't be loaded right now.";
       }
