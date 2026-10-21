@@ -37,6 +37,9 @@ jobs:
           mkdir -p /tmp/web/ravens
           cp ravens/ravens.py /tmp/web/ravens/main.py
           python -m pygbag --build --title "Ravens from the Underworld" /tmp/web/ravens
+          mkdir -p /tmp/web/tree-jumper
+          cp tree-jumper/tree_jumper.py /tmp/web/tree-jumper/main.py
+          python -m pygbag --build --title "Tree Jumper" /tmp/web/tree-jumper
       - name: Put the home page and the games together
         run: |
           mkdir _site
@@ -45,6 +48,7 @@ jobs:
           cp -r /tmp/web/the-tower/build/web _site/the-tower
           cp -r /tmp/web/junkyard/build/web _site/junkyard
           cp -r /tmp/web/ravens/build/web _site/ravens
+          cp -r /tmp/web/tree-jumper/build/web _site/tree-jumper
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
