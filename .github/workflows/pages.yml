@@ -40,6 +40,9 @@ jobs:
           mkdir -p /tmp/web/tree-jumper
           cp tree-jumper/tree_jumper.py /tmp/web/tree-jumper/main.py
           python -m pygbag --build --title "Tree Jumper" /tmp/web/tree-jumper
+          mkdir -p /tmp/web/track-of-doom
+          cp track-of-doom/track_of_doom.py /tmp/web/track-of-doom/main.py
+          python -m pygbag --build --title "Track of Doom" /tmp/web/track-of-doom
       - name: Put the home page and the games together
         run: |
           mkdir _site
@@ -49,6 +52,7 @@ jobs:
           cp -r /tmp/web/junkyard/build/web _site/junkyard
           cp -r /tmp/web/ravens/build/web _site/ravens
           cp -r /tmp/web/tree-jumper/build/web _site/tree-jumper
+          cp -r /tmp/web/track-of-doom/build/web _site/track-of-doom
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
