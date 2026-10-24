@@ -43,6 +43,9 @@ jobs:
           mkdir -p /tmp/web/track-of-doom
           cp track-of-doom/track_of_doom.py /tmp/web/track-of-doom/main.py
           python -m pygbag --build --title "Track of Doom" /tmp/web/track-of-doom
+          mkdir -p /tmp/web/castle-keys
+          cp castle-keys/castle_keys.py /tmp/web/castle-keys/main.py
+          python -m pygbag --build --title "Castle Keys" /tmp/web/castle-keys
       - name: Put the home page and the games together
         run: |
           mkdir _site
@@ -53,6 +56,7 @@ jobs:
           cp -r /tmp/web/ravens/build/web _site/ravens
           cp -r /tmp/web/tree-jumper/build/web _site/tree-jumper
           cp -r /tmp/web/track-of-doom/build/web _site/track-of-doom
+          cp -r /tmp/web/castle-keys/build/web _site/castle-keys
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
