@@ -771,7 +771,7 @@ class Game:
         self.miss_t = max(0, self.miss_t - dt)
         self.zap_t = max(0, self.zap_t - dt)
         for cloud in self.clouds:
-            cloud[0] = (cloud[0] + dt * 8 + W + 80) % (W + 160) - 80
+            cloud[0] = (cloud[0] + 80 + dt * 8) % (W + 160) - 80   # drift right, wrap round off-screen
         if self.state not in ("play", "ending") or self.paused:
             return
         self.move_words(dt)
