@@ -36,7 +36,7 @@
       justify-content: center;
       gap: 28px;
       width: 100%;
-      max-width: 2220px;   /* room for seven games side by side */
+      max-width: 2540px;   /* room for eight cards side by side */
     }
 
     .game-col {
@@ -77,6 +77,8 @@
     .jumper { background: linear-gradient(160deg, #6fd86a, #1f7a3a); }
     .doom { background: linear-gradient(160deg, #ff5a4e, #3a0f2e); }
     .keys { background: linear-gradient(160deg, #ffb84d, #6a3cc8); }
+    .bio { background: linear-gradient(160deg, #8fd0ff 0%, #6db04a 55%, #7a4b22 100%); }
+    .game svg.pixel { shape-rendering: crispEdges; }
 
     .game svg {
       display: block;
@@ -171,6 +173,33 @@
   <h1>Alan's World</h1>
 
   <main class="games">
+    <div class="game-col">
+    <a class="game bio" href="bioblock-quest/">
+      <svg class="pixel" viewBox="0 0 120 120" aria-hidden="true">
+        <rect x="0" y="80" width="40" height="40" fill="#8b5a2b"/><rect x="40" y="80" width="40" height="40" fill="#7a4b22"/><rect x="80" y="80" width="40" height="40" fill="#8b5a2b"/>
+        <rect x="0" y="80" width="120" height="10" fill="#5c9e3e"/>
+        <rect x="10" y="96" width="8" height="8" fill="#9c6a38"/><rect x="62" y="104" width="8" height="8" fill="#6a4019"/><rect x="96" y="98" width="8" height="8" fill="#9c6a38"/>
+        <rect x="14" y="56" width="28" height="24" fill="#4f8a3a"/><rect x="20" y="48" width="16" height="8" fill="#62a047"/>
+        <rect x="18" y="52" width="6" height="6" fill="#f2c94c"/><rect x="32" y="60" width="6" height="6" fill="#e88a2a"/><rect x="24" y="66" width="6" height="6" fill="#f2c94c"/>
+        <rect x="78" y="60" width="28" height="20" fill="#7f9a6a"/><rect x="82" y="54" width="8" height="6" fill="#f4ece0"/><rect x="94" y="56" width="8" height="6" fill="#e8b7c4"/>
+        <g transform="translate(40 10)">
+          <rect x="16" y="0" width="4" height="8" fill="#2a2440"/><rect x="24" y="0" width="4" height="8" fill="#2a2440"/>
+          <rect x="20" y="8" width="4" height="32" fill="#2a2440"/>
+          <rect x="0" y="8" width="16" height="8" fill="#3f74d8"/><rect x="28" y="8" width="16" height="8" fill="#3f74d8"/>
+          <rect x="0" y="16" width="20" height="8" fill="#a8ccff"/><rect x="24" y="16" width="20" height="8" fill="#a8ccff"/>
+          <rect x="4" y="24" width="16" height="8" fill="#3f74d8"/><rect x="24" y="24" width="16" height="8" fill="#3f74d8"/>
+          <rect x="8" y="32" width="8" height="6" fill="#3f74d8"/><rect x="28" y="32" width="8" height="6" fill="#3f74d8"/>
+        </g>
+      </svg>
+      <h2>BioBlock Quest</h2>
+      <span class="play">▶ Play</span>
+    </a>
+    <section class="ranking bio-best">
+      <h3>🦋 Team French Cat</h3>
+      <p class="note">Plant a habitat and bring the butterflies back!</p>
+    </section>
+    </div>
+
     <div class="game-col">
     <a class="game tower" href="the-tower/">
       <svg viewBox="0 0 120 120" aria-hidden="true">
@@ -394,7 +423,17 @@
       }
     }
 
-    document.querySelectorAll(".ranking").forEach(showRanking);
+    document.querySelectorAll(".ranking[data-board]").forEach(showRanking);
+
+    // BioBlock Quest keeps its best score in this browser (same site, so we can read it here).
+    try {
+      const best = Number(JSON.parse(localStorage.getItem("bioblock-best")));
+      const played = Number(JSON.parse(localStorage.getItem("bioblock-played")));
+      if (best > 0) {
+        document.querySelector(".bio-best .note").textContent =
+          `Your best habitat: ${best} points (${played} game${played === 1 ? "" : "s"} played)`;
+      }
+    } catch (err) { /* storage blocked: keep the welcome line */ }
   </script>
 </body>
 </html>
