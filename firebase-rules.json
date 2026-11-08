@@ -78,6 +78,11 @@
         }
       }
     },
+    "biocraft-plays": {
+      ".read": true,
+      ".write": true,
+      ".validate": "newData.isNumber() && newData.val() === (data.exists() ? data.val() : 0) + 1"
+    },
     "castle-keys-scores": {
       ".read": true,
       ".indexOn": [

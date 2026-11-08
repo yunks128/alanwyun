@@ -1,19 +1,19 @@
-# BioBlock Quest
+# Biocraft
 
 Team French Cat's FIRST LEGO League Challenge BIOGLOW Innovation Project page:
 how the Palos Verdes blue butterfly depends on a few native plants, and what we
 can build to help it come back.
 
-**Open it:** https://alanwyun.com/bioblock-quest/
+**Open it:** https://alanwyun.com/biocraft/
 
 It is one web page (`index.html`), no build step. Every picture is block art
 drawn with code. It is our science project, with a game in it:
 
 1. **Did you know?** Five quiz cards. Tap one to flip it and see the answer.
-2. **What is BioBlock Quest?** Says what the page is and links to the parts below.
+2. **What is Biocraft?** Says what the page is and links to the parts below.
 3. **The game:** plant a field and bring the butterflies back.
 4. **Our project:** the problem and our question, what we learned, our idea
-   (the Habitat Starter Kit) and how we tested it, and who we told.
+   (the Biocraft Starter Kit) and how we tested it, and who we told.
 5. **You can help:** what to do at home and the plants in our kit.
 6. **Team French Cat**
 
@@ -35,9 +35,17 @@ the right mix of blocks makes animals move in:
 | Western fence lizard | a rock touching 2 plants |
 | Anna's hummingbird | all 4 kinds of plants |
 
-Each Next season, the weedy grass spreads. A plant touching 2 other plants or
-rocks is strong and can't be taken over. The best score and the number of games
-played are kept in the browser, and the home page shows the best score.
+Each Next season, people build one new house or road next to the old ones
+(on bare dirt or weeds, or on a lonely plant if there is no room), and the
+weedy grass spreads. A plant touching 2 other plants or
+rocks is strong and can't be taken over. The best score is kept in the browser, and the home page shows it.
+
+Every finished game adds 1 to `biocraft-plays` in the shared online database
+the other games use, and the page (and the home page card) shows how many games
+everyone has played. The rule for it is the `biocraft-plays` section of
+`firebase-rules.json` in the top folder, which has to be published in the
+Firebase console before the count can go up. Until then the page shows the
+games played on that computer.
 
 ## Try it on your computer
 
@@ -47,4 +55,4 @@ From the top folder:
 python3 -m http.server 8765
 ```
 
-then open http://localhost:8765/bioblock-quest/
+then open http://localhost:8765/biocraft/

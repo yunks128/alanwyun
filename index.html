@@ -174,7 +174,7 @@
 
   <main class="games">
     <div class="game-col">
-    <a class="game bio" href="bioblock-quest/">
+    <a class="game bio" href="biocraft/">
       <svg class="pixel" viewBox="0 0 120 120" aria-hidden="true">
         <rect x="0" y="80" width="40" height="40" fill="#8b5a2b"/><rect x="40" y="80" width="40" height="40" fill="#7a4b22"/><rect x="80" y="80" width="40" height="40" fill="#8b5a2b"/>
         <rect x="0" y="80" width="120" height="10" fill="#5c9e3e"/>
@@ -191,7 +191,7 @@
           <rect x="8" y="32" width="8" height="6" fill="#3f74d8"/><rect x="28" y="32" width="8" height="6" fill="#3f74d8"/>
         </g>
       </svg>
-      <h2>BioBlock Quest</h2>
+      <h2>Biocraft</h2>
       <span class="play">▶ Play</span>
     </a>
     <section class="ranking bio-best">
@@ -425,15 +425,26 @@
 
     document.querySelectorAll(".ranking[data-board]").forEach(showRanking);
 
-    // BioBlock Quest keeps its best score in this browser (same site, so we can read it here).
+    // Biocraft keeps its best score in this browser (same site, so we can read it here).
     try {
-      const best = Number(JSON.parse(localStorage.getItem("bioblock-best")));
-      const played = Number(JSON.parse(localStorage.getItem("bioblock-played")));
+      const best = Number(JSON.parse(localStorage.getItem("biocraft-best")));
+      const played = Number(JSON.parse(localStorage.getItem("biocraft-played")));
       if (best > 0) {
         document.querySelector(".bio-best .note").textContent =
           `Your best habitat: ${best} points (${played} game${played === 1 ? "" : "s"} played)`;
       }
     } catch (err) { /* storage blocked: keep the welcome line */ }
+
+    // and how many Biocraft games everyone has played, from the shared database
+    fetch(`${RANKINGS_URL}/biocraft-plays.json`)
+      .then(reply => reply.ok ? reply.json() : null)
+      .then(n => {
+        if (!Number.isFinite(n) || n < 1) return;
+        const line = el("p", "note", `🌱 ${n.toLocaleString()} habitat${n === 1 ? "" : "s"} planted by players`);
+        line.style.marginTop = "8px";
+        document.querySelector(".bio-best").append(line);
+      })
+      .catch(() => {});
   </script>
 </body>
 </html>

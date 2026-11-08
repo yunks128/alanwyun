@@ -50,7 +50,7 @@ jobs:
         run: |
           mkdir _site
           cp index.html CNAME .nojekyll _site/
-          cp -r bioblock-quest _site/bioblock-quest
+          cp -r biocraft _site/biocraft
           cp -r alien-boom-boom/build/web _site/alien-boom-boom
           cp -r /tmp/web/the-tower/build/web _site/the-tower
           cp -r /tmp/web/junkyard/build/web _site/junkyard

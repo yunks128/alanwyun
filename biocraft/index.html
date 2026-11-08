@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BioBlock Quest</title>
+  <title>Biocraft</title>
   <meta name="description" content="Team French Cat's FIRST LEGO League BIOGLOW Innovation Project: helping the Palos Verdes blue butterfly come back, one block of habitat at a time.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦋</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -231,7 +231,7 @@
     }
     .fact {
       position: relative;
-      min-height: 19rem;
+      min-height: 22rem;
       padding: 0;
       border: 0;
       background: none;
@@ -264,8 +264,8 @@
     .face.front b { font-size: 1.15rem; line-height: 1.35; }
     .face.front small { font-size: .85rem; color: #6a4a10; }
     .face.back { background: #2b1b0e; color: var(--ink); transform: rotateY(180deg); }
-    .face.back canvas { width: 128px; height: 128px; image-rendering: pixelated; border: 3px solid #20160c; }
-    .face.back p { margin: 0; font-size: 1rem; line-height: 1.4; }
+    .face.back canvas { width: 112px; height: 112px; image-rendering: pixelated; border: 3px solid #20160c; }
+    .face.back p { margin: 0; font-size: .95rem; line-height: 1.35; }
     .fact:hover .face.front { background: #ffe56e; }
     .fact:focus-visible { outline: 4px solid #fff; outline-offset: 4px; }
 
@@ -324,24 +324,35 @@
       width: 100%;
       height: auto;
       image-rendering: pixelated;
-      border: 4px solid #20160c;
       cursor: pointer;
       touch-action: manipulation;
       background: var(--topsoil);
     }
-    #field:focus-visible { outline: 4px solid var(--gold); outline-offset: 2px; }
+    #field:focus-visible { outline: 4px solid var(--gold); outline-offset: -4px; }
+
+    /* the game screen: score and messages sit in a bar along its top */
+    .screen {
+      align-self: start;
+      background: #1a120a;
+      border: 4px solid #20160c;
+      box-shadow: 6px 6px 0 rgba(0, 0, 0, .35);
+    }
 
     .hud {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 10px 18px;
-      margin-top: 12px;
+      gap: 8px 16px;
+      padding: 10px 12px;
+      background: #2b1b0e;
+      border-bottom: 3px solid #4f8a3a;
     }
-    .score-box { display: flex; align-items: baseline; gap: 10px; }
-    .score-box span { font-size: .8rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
-    #score, #butterflies { font-family: var(--pixel); font-size: 1.6rem; color: var(--gold); }
-    #season { flex: 1; min-width: 12rem; color: var(--ink); }
+    .score-box { display: flex; flex-direction: column; gap: 4px; }
+    .score-box span { font-size: .7rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    #score, #butterflies { font-family: var(--pixel); font-size: 1.3rem; color: var(--gold); }
+    #season { flex: 1 1 9rem; font-size: .9rem; color: var(--ink); }
+    .hud-buttons { display: flex; gap: 10px; margin-left: auto; }
+    .hud .btn { padding: 8px 10px; font-size: .6rem; }
 
     button {
       font: inherit;
@@ -365,9 +376,11 @@
 
     #status {
       min-height: 3.2em;
-      margin: 12px 0 0;
-      padding: 10px 14px;
-      background: rgba(255, 255, 255, .07);
+      margin: 0;
+      padding: 8px 12px;
+      font-size: .95rem;
+      line-height: 1.4;
+      background: #20160c;
       border-left: 6px solid var(--gold);
     }
 
@@ -411,7 +424,7 @@
 
     .over {
       position: absolute;
-      inset: 4px;
+      inset: 0;
       display: grid;
       place-items: center;
       padding: 16px;
@@ -431,7 +444,7 @@
 </head>
 <body>
   <header class="bar">
-    <a class="logo" href="#top">BIOBLOCK QUEST</a>
+    <a class="logo" href="#top">BIOCRAFT</a>
     <nav aria-label="Sections">
       <a href="#top">Did you know?</a>
       <a href="#game">Play</a>
@@ -450,7 +463,7 @@
         <div class="facts-grid" data-cards="facts"></div>
 
         <div class="about">
-          <h2>What is BioBlock Quest?</h2>
+          <h2>What is Biocraft?</h2>
           <p>It's our <b>science project</b> for FIRST LEGO League. We are team <b>French Cat</b>.
             We want to help a tiny butterfly come back. On this page you can:</p>
           <div class="paths">
@@ -474,10 +487,20 @@
           <li>Press <b>Next season</b>. Watch out for weeds!</li>
         </ol>
         <p class="note">Plant flowers and butterflies fly in. Plant the right mix and more animals move in.
-          Can you get all 6?</p>
+          Can you get all 6? Every season people build a new house or road, so keep your plants close together.</p>
 
         <div class="game">
-          <div>
+          <div class="screen">
+            <div class="hud">
+              <div class="score-box"><span>Biodiversity score</span> <b id="score">0</b></div>
+              <div class="score-box"><span>🦋 Butterflies</span> <b id="butterflies">0</b></div>
+              <div id="season">Season 1. Start planting.</div>
+              <div class="hud-buttons">
+                <button class="btn" id="next" type="button">Next season ▶</button>
+                <button class="btn ghost" id="reset" type="button">Start over</button>
+              </div>
+            </div>
+            <p id="status" aria-live="polite">Season 1. Start planting.</p>
             <div class="field-wrap">
               <canvas id="field" width="192" height="112" tabindex="0"
                 aria-label="The field, 12 blocks wide and 7 tall. Use the arrow keys to move and Enter to put down your block."></canvas>
@@ -489,14 +512,6 @@
                 </div>
               </div>
             </div>
-            <div class="hud">
-              <div class="score-box"><span>Biodiversity score</span> <b id="score">0</b></div>
-              <div class="score-box"><span>🦋 Butterflies</span> <b id="butterflies">0</b></div>
-              <div id="season">Season 1. Start planting.</div>
-              <button class="btn" id="next" type="button">Next season ▶</button>
-              <button class="btn ghost" id="reset" type="button">Start over</button>
-            </div>
-            <p id="status" aria-live="polite">Season 1. Start planting.</p>
           </div>
 
           <div class="side">
@@ -555,7 +570,7 @@
     <section class="layer proto" id="solution">
       <div class="panel">
         <span class="tag">🔬 Our project · Part 3</span>
-        <h2>Our idea: a Habitat Starter Kit</h2>
+        <h2>Our idea: a Biocraft Starter Kit</h2>
         <p>Seed packs of plants that grow here, plus a map that shows where gardens could link up into one long
           path for butterflies. <span class="edit">edit</span></p>
         <div class="cards" data-cards="solution"></div>
@@ -582,7 +597,7 @@
       <div class="panel">
         <span class="tag">🔬 Our project · Part 4</span>
         <h2>Who we told</h2>
-        <div class="count"><b id="played">0</b> <span>games played on this computer</span></div>
+        <div class="count"><b id="played">0</b> <span id="played-label">games played on this computer</span></div>
         <ul class="facts">
           <li>We showed it at <span class="edit">school / library / club</span></li>
           <li>We sent our kit to <span class="edit">expert or group</span> to hear what they think</li>
@@ -625,7 +640,7 @@
     </section>
   </main>
 
-  <footer>BioBlock Quest · Team French Cat · <a href="../">Alan's World</a></footer>
+  <footer>Biocraft · Team French Cat</footer>
 
   <script>
   "use strict";
@@ -714,7 +729,7 @@
 
     function drawBlock(g, type, ox, oy, s, variant = 0) {
       if (type === PAVE) {
-        if (variant) {            // a house
+        if (variant === 1) {      // a house
           for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) px(g, ox, oy, x, y, "#9aa0a8");
           g.fillStyle = "#e8dcc0"; g.fillRect(ox + 2, oy + 7, 12, 9);
           for (let y = 0; y < 6; y++) { g.fillStyle = y % 2 ? "#a63c32" : "#b8463a"; g.fillRect(ox + 6 - y, oy + 1 + y, 4 + y * 2, 1); }
@@ -724,7 +739,9 @@
           for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
             px(g, ox, oy, x, y, hash(x + s, y, 9) < 0.8 ? "#5b5b63" : "#4e4e56");
           }
-          g.fillStyle = "#e8d36a"; g.fillRect(ox + 2, oy + 7, 5, 2); g.fillRect(ox + 10, oy + 7, 5, 2);
+          g.fillStyle = "#e8d36a";
+          if (variant === 2) { g.fillRect(ox + 7, oy + 2, 2, 5); g.fillRect(ox + 7, oy + 10, 2, 5); }   // road going up
+          else { g.fillRect(ox + 2, oy + 7, 5, 2); g.fillRect(ox + 10, oy + 7, 5, 2); }
         }
         return;
       }
@@ -1001,7 +1018,7 @@
       const t = now / 1000;
       flashes = flashes.filter(f => t - f.t < 1.2);
       for (const f of flashes) {
-        fg.fillStyle = `rgba(255, 80, 60, ${0.55 * (1 - (t - f.t) / 1.2)})`;
+        fg.fillStyle = `rgba(${f.color || "255, 80, 60"}, ${0.55 * (1 - (t - f.t) / 1.2)})`;
         fg.fillRect(f.x * T, f.y * T, T, T);
       }
       critters = critters.filter(c => !c.gone);
@@ -1135,8 +1152,27 @@
       afterChange(`Planted ${TOOLS.find(t => t.id === tool).name.toLowerCase()}.`);
     }
 
+    // People build too: each season one new house or road goes up next to the old ones. It takes bare dirt
+    // or weeds first; if there are none, it can pave over a lonely plant (a strong group is left alone).
+    function build() {
+      const nearPave = ([x, y]) => N4.some(([dx, dy]) => at(x + dx, y + dy) === PAVE);
+      let spots = cellsOf(SOIL).concat(cellsOf(WEED)).filter(nearPave);
+      if (!spots.length) spots = [].concat(...PLANTS.map(cellsOf)).filter(c => nearPave(c) && nativeNeighbours(...c) < 2);
+      if (!spots.length) return null;
+      const [x, y] = spots[Math.floor(Math.random() * spots.length)];
+      const lost = at(x, y);
+      // a road keeps going up from a road below it; anything else becomes a house
+      const below = at(x, y + 1) === PAVE && house[(y + 1) * COLS + x] !== 1;
+      const isRoad = below && Math.random() < 0.5;
+      set(x, y, PAVE);
+      house[y * COLS + x] = isRoad ? 2 : 1;
+      flashes.push({ x, y, t: performance.now() / 1000, color: "120, 120, 140" });
+      return { what: isRoad ? "road" : "house", lost: isPlant(lost) ? TOOLS.find(t => t.id === lost).name.toLowerCase() : null };
+    }
+
     function nextSeason() {
       if (over) return;
+      const built = build();
       // invasive grass: each clump tries to spread into one neighbouring block
       const changed = [];
       cellsOf(WEED).forEach(([x, y]) => {
@@ -1160,18 +1196,47 @@
         return;
       }
       season++; budget = BUDGET;
-      let msg = spread ? `The weeds spread to ${spread} more block${spread === 1 ? "" : "s"}` : "The weeds did not spread this time";
+      let msg = built ? (built.what === "house" ? "A new house was built" : "A new road was built") +
+        (built.lost ? ` on top of your ${built.lost}! ` : ". ") : "";
+      msg += spread ? `The weeds spread to ${spread} more block${spread === 1 ? "" : "s"}` : "The weeds did not spread this time";
       msg += lostPlants ? ` and pushed out ${lostPlants} lonely plant${lostPlants === 1 ? "" : "s"}.` : ".";
       afterChange(`Season ${season}. ${msg}`);
     }
 
+    // Every finished game adds 1 to a counter in the shared online database the other games use
+    // (the "biocraft-plays" rule in firebase-rules.json). If it can't be reached, we show this
+    // computer's own count instead.
+    const PLAYS_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com/biocraft-plays.json";
+    function showPlays(n, everyone) {
+      document.getElementById("played").textContent = Number(n).toLocaleString();
+      document.getElementById("played-label").textContent =
+        everyone ? "games played by everyone so far" : "games played on this computer";
+    }
+    async function loadPlays() {
+      try {
+        const reply = await fetch(PLAYS_URL);
+        if (!reply.ok) return;
+        const n = await reply.json();
+        if (Number.isFinite(n)) showPlays(n, true);
+      } catch (e) { /* offline: keep this computer's count */ }
+    }
+    async function countPlay() {
+      try {
+        const reply = await fetch(PLAYS_URL, { method: "PUT", body: JSON.stringify({ ".sv": { increment: 1 } }) });
+        if (!reply.ok) return;
+        const n = await reply.json();
+        if (Number.isFinite(n)) showPlays(n, true);
+      } catch (e) { /* offline: the game still counts on this computer */ }
+    }
+
     function finish() {
       const s = score();
-      const best = Math.max(store.get("bioblock-best", 0), s);
-      const played = store.get("bioblock-played", 0) + 1;
-      store.set("bioblock-best", best);
-      store.set("bioblock-played", played);
-      document.getElementById("played").textContent = played;
+      const best = Math.max(store.get("biocraft-best", 0), s);
+      const played = store.get("biocraft-played", 0) + 1;
+      store.set("biocraft-best", best);
+      store.set("biocraft-played", played);
+      showPlays(played, false);
+      countPlay();
       document.getElementById("over-text").textContent =
         `You got ${s} points, and ${present.size} of ${SPECIES.length} animals moved in. ` +
         `Best on this computer: ${best}.`;
@@ -1183,8 +1248,8 @@
 
     function cellFromEvent(e) {
       const r = field.getBoundingClientRect();
-      const x = Math.floor((e.clientX - r.left - 4) / (r.width - 8) * COLS);
-      const y = Math.floor((e.clientY - r.top - 4) / (r.height - 8) * ROWS);
+      const x = Math.floor((e.clientX - r.left) / r.width * COLS);
+      const y = Math.floor((e.clientY - r.top) / r.height * ROWS);
       return (x < 0 || y < 0 || x >= COLS || y >= ROWS) ? null : { x, y };
     }
     field.addEventListener("pointermove", e => { if (e.pointerType === "mouse") hover = cellFromEvent(e); });
@@ -1482,27 +1547,27 @@
         } },
       { q: "What is pushing it out of its home?", title: "Houses and roads",
         a: "Houses, roads, and weeds that grow too fast take the place of its plants.", draw: P[3].draw },
-      { q: "Why do we need the Palos Verdes blue?", title: "An umbrella for everyone",
-        a: "To save it, we save its home. That home shelters bees, lizards, and birds too, like an umbrella!",
+      { q: "Why do we need the Palos Verdes blue?", title: "Nature's team",
+        a: "It's part of nature's team! Birds eat its caterpillars, and ants guard them. If one kind of life " +
+          "disappears, the others lose a partner. Lots of different kinds of life keep nature healthy. " +
+          "That's biodiversity!",
         draw(g, t) {
-          sky(g, "#7a9cc0", "#9fb8d4");
-          drawBlock(g, SAGE, 0, 16, 121); drawBlock(g, BUCK, 16, 16, 122);
-          g.fillStyle = "#cfe4ff";                      // rain, except under the umbrella
-          for (let i = 0; i < 9; i++) {
-            const x = (i * 7 + 3) % 32, y = Math.floor((t * 24 + i * 11) % 30);
-            if (x > 3 && x < 29 && y > 2) continue;
-            g.fillRect(x, y, 1, 2);
+          sky(g);
+          drawBlock(g, DEER, 0, 16, 121); drawBlock(g, BUCK, 16, 16, 122);
+          // a caterpillar on the deerweed, with two ants walking back and forth beside it
+          for (let i = 0; i < 5; i++) {
+            g.fillStyle = i === 0 ? "#2f6e33" : i % 2 ? "#9ad84a" : "#7cc23a";
+            g.fillRect(4 + i * 2, 17 + Math.round(Math.sin(t * 5 + i) * 0.5), 2, 2);
           }
-          for (let x = 3; x < 29; x++) {               // the umbrella
-            const top = 3 + Math.round(((x - 16) / 13) ** 2 * 5);
-            g.fillStyle = (Math.floor((x - 3) / 5) % 2) ? "#3f74d8" : "#a8ccff";
-            g.fillRect(x, top, 1, 9 - top);
-          }
-          g.fillStyle = "#6a4426"; g.fillRect(16, 2, 1, 2); g.fillRect(16, 9, 1, 12);
-          drawSprite(g, SPRITES.fly, 6, 12 + Math.round(Math.sin(t * 3)), Math.floor(t * 6) % 2);
-          drawSprite(g, SPRITES.bee, 21, 13 + Math.round(Math.sin(t * 9)), Math.floor(t * 16) % 2);
-          drawSprite(g, SPRITES.gnat, 18, 17 - (Math.floor(t * 2) % 3 === 0 ? 1 : 0));
-          drawSprite(g, SPRITES.lizard, 4, 22);
+          g.fillStyle = "#1f1d24";
+          [0, 1].forEach(k => {
+            const ax = 3 + Math.round((Math.sin(t * 1.5 + k * 3) * 0.5 + 0.5) * 10);
+            g.fillRect(ax, 20, 1, 1); g.fillRect(ax + 1, 20, 1, 1); g.fillRect(ax + 2, 19, 1, 1);
+          });
+          drawSprite(g, SPRITES.gnat, 2, 4 - (Math.floor(t * 2) % 3 === 0 ? 1 : 0));          // a bird watching
+          drawSprite(g, SPRITES.fly, 14 + Math.sin(t) * 3, 6 + Math.sin(t * 2.3) * 2, Math.floor(t * 6) % 2);
+          drawSprite(g, SPRITES.bee, 24, 13 + Math.round(Math.sin(t * 9)), Math.floor(t * 16) % 2);
+          if (Math.floor(t * 2) % 2) { g.fillStyle = "#ff8fa8"; g.fillRect(12, 1, 1, 1); g.fillRect(14, 1, 1, 1); g.fillRect(12, 2, 3, 1); g.fillRect(13, 3, 1, 1); }
         } },
     ];
 
@@ -1575,7 +1640,8 @@
     }
 
     // ---------- start ----------
-    document.getElementById("played").textContent = store.get("bioblock-played", 0);
+    showPlays(store.get("biocraft-played", 0), false);
+    loadPlays();
     chooseTool(DEER);
     newField();
     requestAnimationFrame(loop);
