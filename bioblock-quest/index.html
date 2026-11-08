@@ -93,7 +93,7 @@
       background-size: auto;
       color: #20160c;
     }
-    .hero .sky { padding: 64px 16px 40px; text-align: center; }
+    .hero .sky { padding: 40px 16px 32px; text-align: center; }
     .hero .ground {
       height: 64px;
       background: var(--grass-tex, #4f8a3a) repeat-x top / 64px 64px, var(--topsoil);
@@ -221,6 +221,92 @@
     .card figcaption b { display: block; margin-bottom: 2px; color: #b8f08c; }
     .card figcaption { font-size: .95rem; line-height: 1.45; }
 
+    /* ---------- did you know? flip cards ---------- */
+    .facts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+      gap: 18px;
+      max-width: 72rem;
+      margin: 24px auto 0;
+    }
+    .fact {
+      position: relative;
+      min-height: 19rem;
+      padding: 0;
+      border: 0;
+      background: none;
+      perspective: 900px;
+      text-align: center;
+    }
+    .fact-inner {
+      position: absolute;
+      inset: 0;
+      transform-style: preserve-3d;
+      transition: transform .5s ease;
+    }
+    .fact.open .fact-inner { transform: rotateY(180deg); }
+    .face {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 16px;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border: 4px solid #20160c;
+      box-shadow: 6px 6px 0 rgba(0, 0, 0, .3);
+    }
+    .face.front { background: #ffd93d; color: #20160c; }
+    .face.front .big { font-family: var(--pixel); font-size: 2.6rem; color: #20160c; }
+    .face.front b { font-size: 1.15rem; line-height: 1.35; }
+    .face.front small { font-size: .85rem; color: #6a4a10; }
+    .face.back { background: #2b1b0e; color: var(--ink); transform: rotateY(180deg); }
+    .face.back canvas { width: 128px; height: 128px; image-rendering: pixelated; border: 3px solid #20160c; }
+    .face.back p { margin: 0; font-size: 1rem; line-height: 1.4; }
+    .fact:hover .face.front { background: #ffe56e; }
+    .fact:focus-visible { outline: 4px solid #fff; outline-offset: 4px; }
+
+    .about {
+      max-width: 64rem;
+      margin: 36px auto 0;
+      padding: 22px clamp(16px, 4vw, 32px) 26px;
+      background: #fff8ec;
+      border: 4px solid #20160c;
+      box-shadow: 6px 6px 0 rgba(0, 0, 0, .25);
+    }
+    .about h2 { color: #2a6a2a; }
+    .about p { max-width: 44rem; margin: 0 auto; }
+    .paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 14px; margin-top: 18px; }
+    .path {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 16px 12px;
+      color: #20160c;
+      text-decoration: none;
+      background: #b8f08c;
+      border: 4px solid #20160c;
+      box-shadow: inset -4px -4px 0 #5e9a3a;
+      transition: transform .15s ease;
+    }
+    .path:nth-child(2) { background: #a8ccff; box-shadow: inset -4px -4px 0 #4f86e8; }
+    .path:nth-child(3) { background: #ffd93d; box-shadow: inset -4px -4px 0 #c89a10; }
+    .path:hover, .path:focus-visible { transform: translateY(-4px); outline: none; }
+    .path .emoji { font-size: 2rem; line-height: 1; }
+    .path b { font-size: 1.15rem; }
+    .path span:last-child { font-size: .9rem; line-height: 1.35; }
+
+    .howto { margin: 0; padding-left: 1.4em; font-size: 1.15rem; }
+    .howto li { margin: 4px 0; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .fact-inner, .path { transition: none; }
+    }
+
     footer { padding: 28px 16px 40px; text-align: center; font-size: .9rem; color: var(--muted); background: #121015; }
 
     /* ---------- the game ---------- */
@@ -347,11 +433,10 @@
   <header class="bar">
     <a class="logo" href="#top">BIOBLOCK QUEST</a>
     <nav aria-label="Sections">
-      <a href="#problem">Problem</a>
-      <a href="#research">Research</a>
+      <a href="#top">Did you know?</a>
       <a href="#game">Play</a>
-      <a href="#solution">Solution</a>
-      <a href="#share">Share</a>
+      <a href="#project">Our project</a>
+      <a href="#help">You can help</a>
       <a href="#team">Team</a>
       <a class="home" href="../">← Alan's World</a>
     </nav>
@@ -360,65 +445,36 @@
   <main id="top">
     <section class="layer hero">
       <div class="sky">
-        <p class="kicker">FIRST LEGO League Challenge · BIOGLOW 2026–27 · Innovation Project</p>
-        <h1>Every block of habitat counts.</h1>
-        <p class="lead">Team <b>French Cat</b> is learning how one tiny butterfly on the Palos Verdes Peninsula
-          needs a few wild plants to live, and what we can build to help it come back.
-          A <b>habitat</b> is a home for plants and animals.</p>
+        <h1>Did you know?</h1>
+        <p class="lead">Tap a card to find out!</p>
+        <div class="facts-grid" data-cards="facts"></div>
+
+        <div class="about">
+          <h2>What is BioBlock Quest?</h2>
+          <p>It's our <b>science project</b> for FIRST LEGO League. We are team <b>French Cat</b>.
+            We want to help a tiny butterfly come back. On this page you can:</p>
+          <div class="paths">
+            <a class="path" href="#game"><span class="emoji">🎮</span><b>Play our game</b><span>Plant a field and bring the butterflies back.</span></a>
+            <a class="path" href="#project"><span class="emoji">🔬</span><b>See our project</b><span>What we learned and what we built.</span></a>
+            <a class="path" href="#help"><span class="emoji">🌱</span><b>Help at home</b><span>Plants you can grow to help.</span></a>
+          </div>
+        </div>
         <canvas id="hero-art" width="192" height="48" aria-hidden="true"></canvas>
       </div>
       <div class="ground"></div>
     </section>
 
-    <section class="layer topsoil" id="problem">
-      <div class="panel">
-        <span class="tag">Layer 1 · Topsoil</span>
-        <h2>The problem</h2>
-        <p>The <b>Palos Verdes blue</b> is a tiny butterfly. It lives almost nowhere else in the world. Its baby
-          caterpillars eat only a few plants, like <b>deerweed</b>. When people build roads and houses, or weeds take
-          over, the caterpillars have no food.</p>
-        <p>In 1980 it was put on the endangered list. People thought it was gone forever. Then in 1994, someone found
-          it again! It still needs our help.</p>
-        <div class="cards" data-cards="problem"></div>
-        <div class="question">
-          <strong>Our question</strong>
-          <p>How might we help families on the peninsula grow the right plants so local pollinators have a connected home?</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="layer deepsoil" id="research">
-      <div class="panel">
-        <span class="tag">Layer 2 · Deep soil</span>
-        <h2>What we found out</h2>
-        <ul class="facts">
-          <li>Wild plants that grow here feed the bugs that live here. Many caterpillars eat only 1 or 2 kinds of plants.</li>
-          <li>Small patches that are far apart are hard for animals to use. One long, connected strip works better.</li>
-          <li>Weeds from other places grow fast. They push out the plants that belong here.</li>
-          <li><span class="edit">edit: add a fact from your own research</span></li>
-        </ul>
-        <div class="cards" data-cards="research"></div>
-        <h3>People we talked to</h3>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Who</th><th>Job</th><th>What we learned</th></tr></thead>
-            <tbody>
-              <tr><td><span class="edit">name</span></td><td>Protects wild land near us</td><td><span class="edit">key idea</span></td></tr>
-              <tr><td><span class="edit">name</span></td><td>Sells plants that grow here</td><td><span class="edit">key idea</span></td></tr>
-              <tr><td><span class="edit">name</span></td><td>Science teacher</td><td><span class="edit">key idea</span></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section class="layer stone" id="game">
+    <section class="layer topsoil" id="game">
       <div class="panel wide">
-        <span class="tag">Layer 3 · Stone · Interactive</span>
-        <h2>Restore the habitat</h2>
-        <p>Pick a block. Then tap the field to put it there. Plant flowers and butterflies will fly in! Plant the
-          right mix, and more animals will move in. Press <b>Next season</b> to see what weeds do to a field when
-          nobody takes care of it. <b>Biodiversity</b> means lots of different kinds of living things.</p>
+        <span class="tag">🎮 The game</span>
+        <h2>Bring the butterflies back!</h2>
+        <ol class="howto">
+          <li><b>Pick a plant</b> from the list.</li>
+          <li><b>Tap the field</b> to plant it.</li>
+          <li>Press <b>Next season</b>. Watch out for weeds!</li>
+        </ol>
+        <p class="note">Plant flowers and butterflies fly in. Plant the right mix and more animals move in.
+          Can you get all 6?</p>
 
         <div class="game">
           <div>
@@ -457,19 +513,56 @@
       </div>
     </section>
 
+    <section class="layer deepsoil" id="project">
+      <div class="panel">
+        <span class="tag">🔬 Our project · Part 1</span>
+        <h2>The problem</h2>
+        <p>The <b>Palos Verdes blue</b> butterfly is in trouble. Its caterpillars only eat a few plants, like
+          <b>deerweed</b>. Houses, roads, and weeds are taking the place of those plants.</p>
+        <p>It has been on the endangered list since 1980. That means there are very few left.</p>
+        <div class="question">
+          <strong>Our question</strong>
+          <p>How might we help families on the peninsula grow the right plants so local pollinators have a connected home?</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="layer stone" id="research">
+      <div class="panel">
+        <span class="tag">🔬 Our project · Part 2</span>
+        <h2>What we learned</h2>
+        <ul class="facts">
+          <li>Wild plants that grow here feed the bugs that live here. Many caterpillars eat only 1 or 2 kinds of plants.</li>
+          <li>Small patches that are far apart are hard for animals to use. One long, connected strip works better.</li>
+          <li>Weeds from other places grow fast. They push out the plants that belong here.</li>
+          <li><span class="edit">edit: add a fact from your own research</span></li>
+        </ul>
+        <div class="cards" data-cards="research"></div>
+        <h3>People we talked to</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Who</th><th>Job</th><th>What we learned</th></tr></thead>
+            <tbody>
+              <tr><td><span class="edit">name</span></td><td>Protects wild land near us</td><td><span class="edit">key idea</span></td></tr>
+              <tr><td><span class="edit">name</span></td><td>Sells plants that grow here</td><td><span class="edit">key idea</span></td></tr>
+              <tr><td><span class="edit">name</span></td><td>Science teacher</td><td><span class="edit">key idea</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section class="layer proto" id="solution">
       <div class="panel">
-        <span class="tag">Layer 4 · Bedrock prototype</span>
-        <h2>Our idea and how we tested it</h2>
+        <span class="tag">🔬 Our project · Part 3</span>
+        <h2>Our idea: a Habitat Starter Kit</h2>
+        <p>Seed packs of plants that grow here, plus a map that shows where gardens could link up into one long
+          path for butterflies. <span class="edit">edit</span></p>
+        <div class="cards" data-cards="solution"></div>
         <div class="steps">
           <div class="step">
-            <h3>Our idea</h3>
-            <p>A "Habitat Starter Kit." It has seed packs of plants that grow here, and a map that shows where
-              gardens could link up into one long path. <span class="edit">edit</span></p>
-          </div>
-          <div class="step">
             <h3>What we built</h3>
-            <p>We made the first kit, and the game above, to show why picking the right plant matters.
+            <p>The first kit, and the game on this page, to show why picking the right plant matters.
               <span class="edit">photo or model</span></p>
           </div>
           <div class="step">
@@ -482,26 +575,14 @@
             <p>Testers told us <span class="edit">feedback</span>, so we changed <span class="edit">what changed</span>.</p>
           </div>
         </div>
-        <h3>What's in our kit</h3>
-        <p>Wild plants that grow on the Palos Verdes Peninsula:</p>
-        <ul class="facts">
-          <li><b>Deerweed</b>: food for Palos Verdes blue caterpillars.</li>
-          <li><b>Santa Barbara milkvetch</b>: the other plant Palos Verdes blue caterpillars eat.</li>
-          <li><b>California buckwheat</b>: lots of tiny flowers with nectar for bees and butterflies.</li>
-          <li><b>California sagebrush</b>: a soft grey bush. Small birds hide and nest in it.</li>
-          <li><b>Bush sunflower</b>: bright yellow flowers that bees love.</li>
-          <li><b>Narrowleaf milkweed</b>: food for monarch butterfly caterpillars.</li>
-        </ul>
-        <p class="note">Ask a local native plant nursery which seeds are best for your yard. <span class="edit">edit</span></p>
-        <div class="cards" data-cards="solution"></div>
       </div>
     </section>
 
     <section class="layer deepstone" id="share">
       <div class="panel">
-        <span class="tag">Layer 5 · Deep stone</span>
+        <span class="tag">🔬 Our project · Part 4</span>
         <h2>Who we told</h2>
-        <div class="count"><b id="played">0</b> <span>habitat games played on this computer</span></div>
+        <div class="count"><b id="played">0</b> <span>games played on this computer</span></div>
         <ul class="facts">
           <li>We showed it at <span class="edit">school / library / club</span></li>
           <li>We sent our kit to <span class="edit">expert or group</span> to hear what they think</li>
@@ -511,11 +592,33 @@
       </div>
     </section>
 
+    <section class="layer topsoil" id="help">
+      <div class="panel">
+        <span class="tag">🌱 You can help</span>
+        <h2>Help at home</h2>
+        <div class="steps">
+          <div class="step"><h3>1. Plant wild plants</h3><p>Pick plants that grow here naturally. See the list below.</p></div>
+          <div class="step"><h3>2. Pull weeds</h3><p>Pull them out early, before they spread.</p></div>
+          <div class="step"><h3>3. Team up</h3><p>Ask your neighbors to plant too. Gardens close together make a butterfly path.</p></div>
+        </div>
+        <h3>Plants in our kit</h3>
+        <ul class="facts">
+          <li><b>Deerweed</b>: food for Palos Verdes blue caterpillars.</li>
+          <li><b>Santa Barbara milkvetch</b>: the other plant Palos Verdes blue caterpillars eat.</li>
+          <li><b>California buckwheat</b>: lots of tiny flowers with nectar for bees and butterflies.</li>
+          <li><b>California sagebrush</b>: a soft grey bush. Small birds hide and nest in it.</li>
+          <li><b>Bush sunflower</b>: bright yellow flowers that bees love.</li>
+          <li><b>Narrowleaf milkweed</b>: food for monarch butterfly caterpillars.</li>
+        </ul>
+        <p class="note">Ask a local native plant nursery which seeds are best for your yard. <span class="edit">edit</span></p>
+      </div>
+    </section>
+
     <section class="layer bedrock" id="team">
       <div class="panel">
-        <span class="tag">Bedrock · The crew</span>
-        <h2>Our team</h2>
-        <p>Made by team <b>French Cat</b> for FIRST LEGO League Challenge BIOGLOW. We drew all the block art with code.</p>
+        <span class="tag">🐱 The team</span>
+        <h2>Team French Cat</h2>
+        <p>We made this for FIRST LEGO League Challenge BIOGLOW 2026–27. We drew all the block art with code.</p>
         <p><span class="edit">edit: team members and what each person did</span></p>
         <div class="cards" data-cards="team"></div>
       </div>
@@ -1358,8 +1461,89 @@
       ],
     };
 
+    // "Did you know?" quiz cards reuse the problem pictures, plus one for the butterfly being found again
+    const P = CARDS.problem;
+    CARDS.facts = [
+      { q: "Which butterfly lives almost nowhere else in the world?", title: "Palos Verdes blue",
+        a: "The Palos Verdes blue! It lives right here, near us. It's about as big as your thumbnail.", draw: P[0].draw },
+      { q: "What do its baby caterpillars eat?", title: "Deerweed",
+        a: "Only a few plants, like deerweed. No deerweed means no butterflies!", draw: P[1].draw },
+      { q: "Did people ever think it was gone?", title: "Found again",
+        a: "Yes! People thought it was gone forever. Then in 1994, someone found it again!",
+        draw(g, t) {
+          sky(g); drawBlock(g, DEER, 0, 16, 111); drawBlock(g, DEER, 16, 16, 112);
+          const found = (t % 5) > 2.5;
+          const mx = Math.round(16 + Math.sin(t * 1.2) * 9), my = 10;
+          if (found) drawSprite(g, SPRITES.fly, mx - 3, my - 3, Math.floor(t * 6) % 2);
+          g.strokeStyle = "#6a4426"; g.lineWidth = 2;
+          g.beginPath(); g.arc(mx, my, 6, 0, Math.PI * 2); g.stroke();
+          g.fillStyle = "#6a4426"; g.fillRect(mx + 4, my + 4, 3, 3); g.fillRect(mx + 6, my + 6, 3, 3);
+          if (found) { g.fillStyle = "#ffd93d"; g.fillRect(mx + 8, 1, 2, 5); g.fillRect(mx + 8, 7, 2, 2); }
+        } },
+      { q: "What is pushing it out of its home?", title: "Houses and roads",
+        a: "Houses, roads, and weeds that grow too fast take the place of its plants.", draw: P[3].draw },
+      { q: "Why do we need the Palos Verdes blue?", title: "An umbrella for everyone",
+        a: "To save it, we save its home. That home shelters bees, lizards, and birds too, like an umbrella!",
+        draw(g, t) {
+          sky(g, "#7a9cc0", "#9fb8d4");
+          drawBlock(g, SAGE, 0, 16, 121); drawBlock(g, BUCK, 16, 16, 122);
+          g.fillStyle = "#cfe4ff";                      // rain, except under the umbrella
+          for (let i = 0; i < 9; i++) {
+            const x = (i * 7 + 3) % 32, y = Math.floor((t * 24 + i * 11) % 30);
+            if (x > 3 && x < 29 && y > 2) continue;
+            g.fillRect(x, y, 1, 2);
+          }
+          for (let x = 3; x < 29; x++) {               // the umbrella
+            const top = 3 + Math.round(((x - 16) / 13) ** 2 * 5);
+            g.fillStyle = (Math.floor((x - 3) / 5) % 2) ? "#3f74d8" : "#a8ccff";
+            g.fillRect(x, top, 1, 9 - top);
+          }
+          g.fillStyle = "#6a4426"; g.fillRect(16, 2, 1, 2); g.fillRect(16, 9, 1, 12);
+          drawSprite(g, SPRITES.fly, 6, 12 + Math.round(Math.sin(t * 3)), Math.floor(t * 6) % 2);
+          drawSprite(g, SPRITES.bee, 21, 13 + Math.round(Math.sin(t * 9)), Math.floor(t * 16) % 2);
+          drawSprite(g, SPRITES.gnat, 18, 17 - (Math.floor(t * 2) % 3 === 0 ? 1 : 0));
+          drawSprite(g, SPRITES.lizard, 4, 22);
+        } },
+    ];
+
     const cardViews = [];
-    document.querySelectorAll("[data-cards]").forEach(holder => {
+    document.querySelectorAll('[data-cards="facts"]').forEach(holder => {
+      CARDS.facts.forEach((card, i) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "fact";
+        btn.setAttribute("aria-pressed", "false");
+        const inner = document.createElement("span");
+        inner.className = "fact-inner";
+        const front = document.createElement("span");
+        front.className = "face front";
+        const big = document.createElement("span"); big.className = "big"; big.textContent = "?";
+        const q = document.createElement("b"); q.textContent = card.q;
+        const hint = document.createElement("small"); hint.textContent = "Tap to find out";
+        front.append(big, q, hint);
+        const back = document.createElement("span");
+        back.className = "face back";
+        const c = document.createElement("canvas");
+        c.width = c.height = 32;
+        c.setAttribute("aria-hidden", "true");
+        const a = document.createElement("p"); a.textContent = card.a;
+        back.append(c, a);
+        inner.append(front, back);
+        btn.append(inner);
+        btn.addEventListener("click", () => {
+          const open = btn.classList.toggle("open");
+          btn.setAttribute("aria-pressed", String(open));
+        });
+        holder.append(btn);
+        const view = { g: c.getContext("2d"), card, visible: true };
+        cardViews.push(view);
+        card.draw(view.g, 1.3 + i);
+        if ("IntersectionObserver" in window) {
+          new IntersectionObserver(([e]) => { view.visible = e.isIntersecting; }).observe(btn);
+        }
+      });
+    });
+    document.querySelectorAll('[data-cards]:not([data-cards="facts"])').forEach(holder => {
       for (const card of CARDS[holder.dataset.cards] || []) {
         const fig = document.createElement("figure");
         fig.className = "card";

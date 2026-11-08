@@ -7,16 +7,15 @@ can build to help it come back.
 **Open it:** https://alanwyun.com/bioblock-quest/
 
 It is one web page (`index.html`), no build step. Every picture is block art
-drawn with code. The page is built as layers of ground, top to bottom:
+drawn with code. It is our science project, with a game in it:
 
-| Layer | Section |
-| --- | --- |
-| Topsoil | The problem |
-| Deep soil | What we found out |
-| Stone | Restore the habitat (the game) |
-| Bedrock prototype | Our idea, our kit, how we tested it |
-| Deep stone | Who we told |
-| Bedrock | Our team |
+1. **Did you know?** Five quiz cards. Tap one to flip it and see the answer.
+2. **What is BioBlock Quest?** Says what the page is and links to the parts below.
+3. **The game:** plant a field and bring the butterflies back.
+4. **Our project:** the problem and our question, what we learned, our idea
+   (the Habitat Starter Kit) and how we tested it, and who we told.
+5. **You can help:** what to do at home and the plants in our kit.
+6. **Team French Cat**
 
 Boxes with a dashed yellow border (`<span class="edit">`) are spots for the team
 to fill in.
