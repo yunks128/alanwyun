@@ -431,12 +431,10 @@ class Game:
         self.shake = 0.0
         self.paused = False
         self.new_best = False
-        self.cheated = False            # cheat runs are never saved to any ranking
         self.start_wave()
 
     def cheat(self):
         """Ctrl + Shift + S + S: straight to wave 9000 with a trillion points."""
-        self.cheated = True
         self.ravens.clear()
         self.pellets.clear()
         self.rockets.clear()
@@ -506,9 +504,6 @@ class Game:
 
     def ask_name(self):
         self.mine = None
-        if self.cheated:
-            self.save_score()           # nothing to save, so skip the name and show the ranking
-            return
         if not self.name:
             self.name = random.choice(FUN_NAMES)
         self.name_fresh = True
@@ -518,14 +513,6 @@ class Game:
     def save_score(self):
         """Add this run to this device's top scores and to the shared ranking."""
         self.name = self.name.strip() or random.choice(FUN_NAMES)
-        if self.cheated:
-            # a cheat run doesn't count: keep it off this device's scores and the shared ranking
-            self.mine = None
-            self.refresh_online()
-            self.scroll = 0
-            self.scroll_follow = True
-            self.state = "dead"
-            return
         self.mine = (self.score, self.wave, self.name)
         self.new_best = self.score > self.best
         self.scores = best_per_name(self.scores + [self.mine])[:MAX_RANKINGS]
@@ -953,8 +940,7 @@ class Game:
         self.text(self.wave, 32, EMBER, (300, 22))
 
         self.text("BEST", 18, (150, 132, 140), (410, 8))
-        self.text(short_number(self.best if self.cheated else max(self.best, self.score)),
-                  32, (255, 214, 120), (410, 22))
+        self.text(short_number(max(self.best, self.score)), 32, (255, 214, 120), (410, 22))
 
         self.text("ROCKET", 18, (150, 132, 140), (560, 8))
         bar = pygame.Rect(560, 26, 130, 9)
@@ -1051,10 +1037,7 @@ class Game:
         self.text("THE RAVENS GOT YOU", 72, (236, 92, 104), (W // 2, 92), "center")
         self.text(f"Wave {self.wave}   -   {self.score} points", 34, (214, 206, 212),
                   (W // 2, 150), "center")
-        if self.cheated:
-            self.text("Cheat run - not saved to the leaderboard", 30, (255, 170, 90),
-                      (W // 2, 192), "center")
-        elif self.new_best:
+        if self.new_best:
             self.text("A NEW BEST!", 34, (150, 230, 160), (W // 2, 192), "center")
         shared = self.online is not None
         self.text("Leaderboard shared with every player" if shared
