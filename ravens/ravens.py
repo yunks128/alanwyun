@@ -83,6 +83,10 @@ VISIBLE_RANKINGS = 5   # rows shown at once on the game-over screen; the rest sc
 RANKING_POOL = 100     # rows pulled from the database before keeping one per name
 MAX_NAME_LEN = 16
 NAME_KEY_DELAY = 0.5   # keys mashed while dying are ignored this long on the name screen
+# Secret cheat: hold Ctrl + Shift and press S twice quickly during a run.
+CHEAT_WAVE = 9000
+CHEAT_SCORE = 1_000_000_000_000
+CHEAT_GAP = 0.8        # most seconds between the two S presses
 # Shared online ranking (the same Firebase database the other games use).
 # Leave the address empty to keep rankings on this device only.
 LEADERBOARD_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com"
@@ -102,6 +106,14 @@ RAVEN_BLACK = (28, 24, 32)
 
 def clamp(v, lo, hi):
     return lo if v < lo else hi if v > hi else v
+
+
+def short_number(n):
+    """Big scores in a few characters for the top bar: 1000000000000 -> 1T."""
+    for size, letter in ((10**12, "T"), (10**9, "B"), (10**6, "M")):
+        if n >= size:
+            return f"{n / size:.1f}".rstrip("0").rstrip(".") + letter
+    return str(n)
 
 
 def http(method, url, body=None):
@@ -359,6 +371,7 @@ class Game:
         self.name_fresh = False
         self.name_time = 0.0
         self.mine = None
+        self.cheat_s_at = None          # when the first S of the cheat was pressed
         self.online = None
         self.scores = self.load_scores()
         self.new_run()
@@ -383,7 +396,19 @@ class Game:
         self.shake = 0.0
         self.paused = False
         self.new_best = False
+        self.cheated = False            # cheat runs are never saved to any ranking
         self.start_wave()
+
+    def cheat(self):
+        """Ctrl + Shift + S + S: straight to wave 9000 with a trillion points."""
+        self.cheated = True
+        self.ravens.clear()
+        self.pellets.clear()
+        self.rockets.clear()
+        self.wave = CHEAT_WAVE - 1
+        self.start_wave()
+        self.score = CHEAT_SCORE
+        self.say(f"CHEAT!  WAVE {CHEAT_WAVE}")
 
     def start_wave(self):
         self.wave += 1
@@ -446,6 +471,9 @@ class Game:
 
     def ask_name(self):
         self.mine = None
+        if self.cheated:
+            self.save_score()           # nothing to save, so skip the name and show the ranking
+            return
         if not self.name:
             self.name = random.choice(FUN_NAMES)
         self.name_fresh = True
@@ -455,6 +483,14 @@ class Game:
     def save_score(self):
         """Add this run to this device's top scores and to the shared ranking."""
         self.name = self.name.strip() or random.choice(FUN_NAMES)
+        if self.cheated:
+            # a cheat run doesn't count: keep it off this device's scores and the shared ranking
+            self.mine = None
+            self.refresh_online()
+            self.scroll = 0
+            self.scroll_follow = True
+            self.state = "dead"
+            return
         self.mine = (self.score, self.wave, self.name)
         self.new_best = self.score > self.best
         self.scores = best_per_name(self.scores + [self.mine])[:MAX_RANKINGS]
@@ -503,6 +539,16 @@ class Game:
             if confirm:
                 self.state = "play"
         elif self.state == "play":
+            mods = pygame.key.get_mods()
+            if key == pygame.K_s and mods & pygame.KMOD_CTRL and mods & pygame.KMOD_SHIFT:
+                if self.cheat_s_at is not None and self.time - self.cheat_s_at <= CHEAT_GAP:
+                    self.cheat_s_at = None
+                    self.cheat()
+                else:
+                    self.cheat_s_at = self.time
+                return
+            if key not in (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LSHIFT, pygame.K_RSHIFT):
+                self.cheat_s_at = None
             if key in (pygame.K_p, pygame.K_ESCAPE):
                 self.paused = not self.paused
         elif self.state == "upgrade":
@@ -860,13 +906,14 @@ class Game:
         self.text("LIVES", 18, (150, 132, 140), (26, 36))
 
         self.text("SCORE", 18, (150, 132, 140), (150, 8))
-        self.text(self.score, 32, BONE, (150, 22))
+        self.text(short_number(self.score), 32, BONE, (150, 22))
 
         self.text("WAVE", 18, (150, 132, 140), (300, 8))
         self.text(self.wave, 32, EMBER, (300, 22))
 
         self.text("BEST", 18, (150, 132, 140), (410, 8))
-        self.text(max(self.best, self.score), 32, (255, 214, 120), (410, 22))
+        self.text(short_number(self.best if self.cheated else max(self.best, self.score)),
+                  32, (255, 214, 120), (410, 22))
 
         self.text("ROCKET", 18, (150, 132, 140), (560, 8))
         bar = pygame.Rect(560, 26, 130, 9)
@@ -963,7 +1010,10 @@ class Game:
         self.text("THE RAVENS GOT YOU", 72, (236, 92, 104), (W // 2, 92), "center")
         self.text(f"Wave {self.wave}   -   {self.score} points", 34, (214, 206, 212),
                   (W // 2, 150), "center")
-        if self.new_best:
+        if self.cheated:
+            self.text("Cheat run - not saved to the leaderboard", 30, (255, 170, 90),
+                      (W // 2, 192), "center")
+        elif self.new_best:
             self.text("A NEW BEST!", 34, (150, 230, 160), (W // 2, 192), "center")
         shared = self.online is not None
         self.text("Leaderboard shared with every player" if shared
