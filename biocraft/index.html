@@ -423,15 +423,16 @@
     .how { margin-top: 10px; font-size: .78rem; line-height: 1.4; color: var(--muted); }
 
     .over {
-      position: absolute;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      padding: 16px;
+      width: min(26rem, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      padding: 22px 20px;
       text-align: center;
-      background: rgba(18, 12, 6, .86);
+      color: var(--ink);
+      background: #20160c;
+      border: 4px solid var(--gold);
+      box-shadow: 0 0 0 4px #20160c, 0 18px 50px rgba(0, 0, 0, .6);
     }
-    .over[hidden] { display: none; }
+    .over::backdrop { background: rgba(10, 6, 2, .72); }
     .over h3 { margin: 0 0 8px; font-family: var(--pixel); font-size: .9rem; line-height: 1.6; color: var(--gold); }
     .over p { margin: 0 0 14px; }
     .over > div { max-height: 100%; overflow-y: auto; }
@@ -539,7 +540,7 @@
             <div class="field-wrap">
               <canvas id="field" width="192" height="112" tabindex="0"
                 aria-label="The field, 12 blocks wide and 7 tall. Use the arrow keys to move and Enter to put down your block."></canvas>
-              <div class="over" id="over" hidden>
+              <dialog class="over" id="over" aria-labelledby="over-title">
                 <div>
                   <h3 id="over-title">Two years later…</h3>
                   <p id="over-text"></p>
@@ -553,7 +554,7 @@
                   </form>
                   <button class="btn ghost" id="again" type="button">Plant a new field</button>
                 </div>
-              </div>
+              </dialog>
             </div>
           </div>
 
@@ -926,7 +927,8 @@
       [[2, 1], [9, 3]].forEach(([x, y]) => set(x, y, DEER));
       season = 1; budget = BUDGET; over = false; flashes = []; critters = [];
       present = new Set(checkSpecies());
-      document.getElementById("over").hidden = true;
+      const overEl = document.getElementById("over");
+      if (overEl.open) overEl.close();
       renderBase();
       syncCritters();
       updateHud("Season 1. Start planting.");
@@ -1117,6 +1119,7 @@
         `Season ${season} of ${SEASONS} · ${budget} block${budget === 1 ? "" : "s"} left`;
       if (message) statusEl.textContent = message;
       nextBtn.disabled = over;
+      nextBtn.textContent = season >= SEASONS ? "Finish ▶" : "Next season ▶";
       document.querySelectorAll("#species li").forEach(li => li.classList.toggle("here", present.has(li.dataset.id)));
     }
 
@@ -1377,7 +1380,8 @@
       document.getElementById("over-text").textContent =
         `You got ${s} points, and ${present.size} of ${SPECIES.length} animals moved in. ` +
         `Best on this computer: ${best}.`;
-      document.getElementById("over").hidden = false;
+      const overEl = document.getElementById("over");
+      if (!overEl.open) overEl.showModal();
       updateHud(present.size === SPECIES.length ? "Every animal found a home. Amazing!" :
         "Two years are up. Next time, keep your plants close together and pull weeds early.");
       saveName.focus({ preventScroll: true });
