@@ -116,6 +116,33 @@ def short_number(n):
     return str(n)
 
 
+# In the browser, pygame doesn't see Ctrl or Shift (it reports no modifiers), so the page's
+# own JavaScript spots Ctrl + Shift + S twice and counts it in window.ravensCheat.
+CHEAT_JS = """
+(function () {
+  if (window.ravensCheat !== undefined) return;
+  window.ravensCheat = 0;
+  var lastS = -1e9;
+  window.addEventListener("keydown", function (e) {
+    if (e.code !== "KeyS" || !e.ctrlKey || !e.shiftKey) return;
+    e.preventDefault();               // so the browser doesn't use Ctrl + Shift + S itself
+    if (e.repeat) return;
+    var now = performance.now();
+    if (now - lastS <= %d) { window.ravensCheat += 1; lastS = -1e9; } else { lastS = now; }
+  }, true);
+})();
+""" % int(CHEAT_GAP * 1000)
+
+
+def web_cheat_count():
+    """How many times the cheat has been typed in the browser (0 if it can't tell)."""
+    try:
+        from platform import window
+        return int(str(window.eval("String(window.ravensCheat || 0)")))
+    except Exception:
+        return 0
+
+
 def http(method, url, body=None):
     """Send one web request and return the reply text, or None if it failed."""
     if WEB:
@@ -372,6 +399,14 @@ class Game:
         self.name_time = 0.0
         self.mine = None
         self.cheat_s_at = None          # when the first S of the cheat was pressed
+        self.web_cheats = 0             # browser cheat count already acted on
+        if WEB:
+            try:
+                from platform import window
+                window.eval(CHEAT_JS)
+                self.web_cheats = web_cheat_count()
+            except Exception:
+                pass                    # no cheat is worth crashing over
         self.online = None
         self.scores = self.load_scores()
         self.new_run()
@@ -612,6 +647,12 @@ class Game:
         self.time += dt
         self.banner_t = max(0, self.banner_t - dt)
         self.shake = max(0, self.shake - dt * 2.5)
+        if WEB:
+            typed = web_cheat_count()
+            if typed != self.web_cheats:
+                self.web_cheats = typed
+                if self.state == "play":
+                    self.cheat()
         if self.state != "play" or self.paused:
             return
         p = self.player
