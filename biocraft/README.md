@@ -40,6 +40,13 @@ Each Next season, people build one new house or road next to the old ones
 weedy grass spreads. A plant touching 2 other plants or
 rocks is strong and can't be taken over. The best score is kept in the browser, and the home page shows it.
 
+When a game ends, the player can type a name and save it to the **Top habitats**
+rankings (`biocraft-scores` in the shared online database). The most animals
+wins, and the higher biodiversity score breaks a tie. Each name shows once,
+with its best game. The top 20 show under the game and on the home page card.
+The rule for it is the `biocraft-scores` section of `firebase-rules.json`, and
+like the counter below it has to be published in the Firebase console first.
+
 Every finished game adds 1 to `biocraft-plays` in the shared online database
 the other games use, and the page (and the home page card) shows how many games
 everyone has played. The rule for it is the `biocraft-plays` section of

@@ -434,6 +434,42 @@
     .over[hidden] { display: none; }
     .over h3 { margin: 0 0 8px; font-family: var(--pixel); font-size: .9rem; line-height: 1.6; color: var(--gold); }
     .over p { margin: 0 0 14px; }
+    .over > div { max-height: 100%; overflow-y: auto; }
+
+    .save { margin: 0 auto 14px; max-width: 20rem; }
+    .save label { display: block; margin-bottom: 6px; font-size: .8rem; color: var(--muted); }
+    .save-row { display: flex; gap: 8px; }
+    .save input {
+      flex: 1;
+      min-width: 0;
+      padding: 8px 10px;
+      font: inherit;
+      color: #20160c;
+      background: #f4ece0;
+      border: 3px solid #20160c;
+    }
+    .save input:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+    .over .save p { min-height: 1.3em; margin: 6px 0 0; font-size: .85rem; color: #b8f08c; }
+
+    /* ---------- the rankings ---------- */
+    .board { margin-top: 24px; padding: 14px 18px 16px; background: rgba(255, 255, 255, .06); border: 2px solid var(--panel-line); }
+    .board h3 { margin: 0 0 4px; font-family: var(--pixel); font-size: .8rem; line-height: 1.6; color: var(--gold); }
+    .board-how, .board-note { margin: 0 0 10px; font-size: .85rem; color: var(--muted); }
+    .board ol {
+      margin: 0;
+      padding: 0 6px 0 0;
+      list-style: none;
+      max-height: 18rem;   /* the rest of the top 20 scroll */
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .board li { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; }
+    .board li + li { border-top: 1px solid var(--panel-line); }
+    .board li.me { color: var(--gold); }
+    .board .place { flex: none; width: 1.8em; color: var(--muted); }
+    .board .who { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .board .animals { flex: none; font-variant-numeric: tabular-nums; }
+    .board .pts { flex: none; width: 5.5em; text-align: right; font-weight: bold; font-variant-numeric: tabular-nums; }
 
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -507,7 +543,15 @@
                 <div>
                   <h3 id="over-title">Two years later…</h3>
                   <p id="over-text"></p>
-                  <button class="btn" id="again" type="button">Plant a new field</button>
+                  <form id="save-form" class="save">
+                    <label for="save-name">Your name for the rankings</label>
+                    <div class="save-row">
+                      <input id="save-name" maxlength="16" autocomplete="nickname" required>
+                      <button class="btn" id="save" type="submit">Save</button>
+                    </div>
+                    <p id="save-msg" aria-live="polite"></p>
+                  </form>
+                  <button class="btn ghost" id="again" type="button">Plant a new field</button>
                 </div>
               </div>
             </div>
@@ -523,6 +567,13 @@
               your biggest group. Lose 2 for each weed block.<br>Tip: a plant that touches 2 other plants or rocks is
               strong. Weeds can't take it over.</p>
           </div>
+        </div>
+
+        <div class="board">
+          <h3>🏆 Top habitats</h3>
+          <p class="board-how">Most animals wins. If two players have the same number, the higher biodiversity score goes first.</p>
+          <p class="board-note" id="board-note">Loading rankings…</p>
+          <ol id="board" hidden></ol>
         </div>
       </div>
     </section>
@@ -1228,8 +1279,95 @@
       } catch (e) { /* offline: the game still counts on this computer */ }
     }
 
+    // ---------- rankings ----------
+    // Each finished game can be saved to "biocraft-scores" in the same shared database
+    // (the "biocraft-scores" rule in firebase-rules.json). Most animals wins; the biodiversity
+    // score breaks ties. Each name shows once, with its best game.
+    const SCORES_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com/biocraft-scores.json";
+    const TOP = 20;
+    const POOL = 200;   // rows fetched before keeping one per name
+    const better = (a, b) => (b.animals - a.animals) || (b.score - a.score);
+    const nameKey = name => String(name || "?").trim().replace(/\s+/g, " ").toLowerCase();
+    let lastGame = null;   // { score, animals, saved }
+
+    function bestPerName(rows) {
+      const best = new Map();
+      for (const row of rows) {
+        const kept = best.get(nameKey(row.name));
+        if (!kept || better(row, kept) < 0) best.set(nameKey(row.name), row);
+      }
+      return [...best.values()];
+    }
+
+    function cell(className, text) {
+      const span = document.createElement("span");
+      span.className = className;
+      span.textContent = text;   // names are typed by players, so never treat them as HTML
+      return span;
+    }
+
+    async function loadBoard() {
+      const note = document.getElementById("board-note");
+      const list = document.getElementById("board");
+      try {
+        const reply = await fetch(`${SCORES_URL}?orderBy=%22score%22&limitToLast=${POOL}`);
+        if (!reply.ok) throw new Error(reply.status);
+        const rows = bestPerName(Object.values(await reply.json() || {})
+            .filter(r => r && Number.isFinite(r.score) && Number.isFinite(r.animals)))
+          .sort(better)
+          .slice(0, TOP);
+        if (!rows.length) {
+          note.textContent = "No habitats saved yet. Finish a game and be the first!";
+          note.hidden = false; list.hidden = true;
+          return;
+        }
+        const mine = nameKey(store.get("biocraft-name", ""));
+        list.replaceChildren(...rows.map((r, i) => {
+          const li = document.createElement("li");
+          if (mine && nameKey(r.name) === mine) li.className = "me";
+          li.append(cell("place", `${i + 1}.`), cell("who", String(r.name || "?")),
+            cell("animals", `🦋 ${r.animals}/${SPECIES.length}`), cell("pts", `${r.score.toLocaleString()} pts`));
+          return li;
+        }));
+        note.hidden = true; list.hidden = false;
+      } catch (e) {
+        note.textContent = "Rankings can't be loaded right now.";
+        note.hidden = false; list.hidden = true;
+      }
+    }
+
+    const saveForm = document.getElementById("save-form");
+    const saveName = document.getElementById("save-name");
+    const saveBtn = document.getElementById("save");
+    const saveMsg = document.getElementById("save-msg");
+    saveForm.addEventListener("submit", async e => {
+      e.preventDefault();
+      const name = saveName.value.trim().replace(/\s+/g, " ").slice(0, 16);
+      if (!name || !lastGame || lastGame.saved) return;
+      store.set("biocraft-name", name);
+      saveBtn.disabled = true; saveName.disabled = true;
+      saveMsg.textContent = "Saving…";
+      try {
+        const reply = await fetch(SCORES_URL, {
+          method: "POST",
+          body: JSON.stringify({ name, score: lastGame.score, animals: lastGame.animals }),
+        });
+        if (!reply.ok) throw new Error(reply.status);
+        lastGame.saved = true;
+        saveMsg.textContent = "Saved! Look for your name in Top habitats below.";
+        loadBoard();
+      } catch (err) {
+        saveMsg.textContent = "Couldn't save right now. Try again in a moment.";
+        saveBtn.disabled = false; saveName.disabled = false;
+      }
+    });
+
     function finish() {
       const s = score();
+      lastGame = { score: s, animals: present.size, saved: false };
+      saveName.value = store.get("biocraft-name", "");
+      saveBtn.disabled = false; saveName.disabled = false;
+      saveMsg.textContent = "";
       const best = Math.max(store.get("biocraft-best", 0), s);
       const played = store.get("biocraft-played", 0) + 1;
       store.set("biocraft-best", best);
@@ -1242,7 +1380,7 @@
       document.getElementById("over").hidden = false;
       updateHud(present.size === SPECIES.length ? "Every animal found a home. Amazing!" :
         "Two years are up. Next time, keep your plants close together and pull weeds early.");
-      document.getElementById("again").focus();
+      saveName.focus({ preventScroll: true });
     }
 
     function cellFromEvent(e) {
@@ -1641,6 +1779,7 @@
     // ---------- start ----------
     showPlays(store.get("biocraft-played", 0), false);
     loadPlays();
+    loadBoard();
     chooseTool(DEER);
     newField();
     requestAnimationFrame(loop);

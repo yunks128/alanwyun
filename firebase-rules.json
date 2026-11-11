@@ -83,6 +83,19 @@
       ".write": true,
       ".validate": "newData.isNumber() && newData.val() === (data.exists() ? data.val() : 0) + 1"
     },
+    "biocraft-scores": {
+      ".read": true,
+      ".indexOn": [
+        "score"
+      ],
+      "$id": {
+        ".write": "!data.exists()",
+        ".validate": "newData.hasChildren(['name', 'score', 'animals']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 16 && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() < 1000 && newData.child('animals').isNumber() && newData.child('animals').val() >= 0 && newData.child('animals').val() <= 6",
+        "$other": {
+          ".validate": "$other === 'name' || $other === 'score' || $other === 'animals'"
+        }
+      }
+    },
     "castle-keys-scores": {
       ".read": true,
       ".indexOn": [

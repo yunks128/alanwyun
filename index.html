@@ -157,6 +157,8 @@
       text-align: center;
     }
 
+    .ranking .bio-extra { margin-top: 8px; font-size: .82rem; }
+
     footer {
       margin-top: auto;
       padding-top: 48px;
@@ -194,9 +196,9 @@
       <h2>Biocraft</h2>
       <span class="play">▶ Play</span>
     </a>
-    <section class="ranking bio-best">
-      <h3>🦋 Team French Cat</h3>
-      <p class="note">Plant a habitat and bring the butterflies back!</p>
+    <section class="ranking bio-best" data-board="biocraft-scores" data-level="animals" data-most="animals">
+      <h3>🦋 Top habitats</h3>
+      <p class="note">Loading rankings…</p>
     </section>
     </div>
 
@@ -372,15 +374,23 @@
     const TOP = 20;
     const POOL = 100;   // rows fetched before keeping one per name
 
+    // Most boards rank by score, then level. A board with data-most="animals" (Biocraft) ranks by
+    // that field first and the score breaks ties; the field is shown where the level usually is.
+    function rankerFor(section) {
+      const most = section.dataset.most;
+      const level = row => (most ? row[most] : row.level) || 0;
+      return most
+        ? (a, b) => (level(b) - level(a)) || (b.score - a.score)
+        : (a, b) => (b.score - a.score) || (level(b) - level(a));
+    }
+
     // Keep only each player's best run, so one name can't fill the whole board.
-    function bestPerName(rows) {
+    function bestPerName(rows, order) {
       const best = new Map();
       for (const row of rows) {
         const key = String(row.name || "?").trim().replace(/\s+/g, " ").toLowerCase();
         const kept = best.get(key);
-        const better = !kept || row.score > kept.score ||
-          (row.score === kept.score && (row.level || 0) > (kept.level || 0));
-        if (better) best.set(key, row);
+        if (!kept || order(row, kept) < 0) best.set(key, row);
       }
       return [...best.values()];
     }
@@ -397,9 +407,10 @@
       try {
         const reply = await fetch(`${RANKINGS_URL}/${section.dataset.board}.json?orderBy=%22score%22&limitToLast=${POOL}`);
         if (!reply.ok) throw new Error(reply.status);
+        const order = rankerFor(section);
         const rows = bestPerName(Object.values(await reply.json() || {})
-            .filter(row => row && Number.isFinite(row.score)))
-          .sort((a, b) => b.score - a.score)
+            .filter(row => row && Number.isFinite(row.score)), order)
+          .sort(order)
           .slice(0, TOP);
         if (!rows.length) {
           note.textContent = "No scores yet. Be the first!";
@@ -410,7 +421,9 @@
           const item = document.createElement("li");
           const score = el("span", "score", row.score.toLocaleString());
           const unit = section.dataset.unit;   // e.g. "512 m" rather than "height 512"
-          score.append(el("span", "where", unit ? `${row.level} ${unit}` : `${section.dataset.level} ${row.level}`));
+          const most = section.dataset.most;   // e.g. "🦋 5 animals"
+          score.append(el("span", "where", most ? `🦋 ${row[most] || 0} ${most}`
+            : unit ? `${row.level} ${unit}` : `${section.dataset.level} ${row.level}`));
           item.append(el("span", "place", `${i + 1}.`), el("span", "name", String(row.name || "?")), score);
           list.append(item);
         });
@@ -430,8 +443,9 @@
       const best = Number(JSON.parse(localStorage.getItem("biocraft-best")));
       const played = Number(JSON.parse(localStorage.getItem("biocraft-played")));
       if (best > 0) {
-        document.querySelector(".bio-best .note").textContent =
-          `Your best habitat: ${best} points (${played} game${played === 1 ? "" : "s"} played)`;
+        const line = el("p", "note bio-extra",
+          `Your best habitat: ${best} points (${played} game${played === 1 ? "" : "s"} played)`);
+        document.querySelector(".bio-best").append(line);
       }
     } catch (err) { /* storage blocked: keep the welcome line */ }
 
@@ -440,8 +454,7 @@
       .then(reply => reply.ok ? reply.json() : null)
       .then(n => {
         if (!Number.isFinite(n) || n < 1) return;
-        const line = el("p", "note", `🌱 ${n.toLocaleString()} habitat${n === 1 ? "" : "s"} planted by players`);
-        line.style.marginTop = "8px";
+        const line = el("p", "note bio-extra", `🌱 ${n.toLocaleString()} habitat${n === 1 ? "" : "s"} planted by players`);
         document.querySelector(".bio-best").append(line);
       })
       .catch(() => {});
