@@ -83,6 +83,11 @@ VISIBLE_RANKINGS = 5   # rows shown at once on the game-over screen; the rest sc
 RANKING_POOL = 100     # rows pulled from the database before keeping one per name
 MAX_NAME_LEN = 16
 NAME_KEY_DELAY = 0.5   # keys mashed while dying are ignored this long on the name screen
+# Secret cheat: hold Ctrl + Shift and press H twice quickly during a run.
+# The old code (Ctrl + Shift + S twice) now just says it doesn't work any more.
+CHEAT_SCORE = 1236
+CHEAT_GAP = 0.8        # most seconds between the two presses
+OLD_CODE_MSG = "That code does not work anymore"
 # Shared online ranking (the same Firebase database the other games use).
 # Leave the address empty to keep rankings on this device only.
 LEADERBOARD_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com"
@@ -124,6 +129,41 @@ def lerp(a, b, t):
 
 def mix(c1, c2, t):
     return tuple(int(lerp(a, b, t)) for a, b in zip(c1, c2))
+
+
+# In the browser, pygame doesn't see Ctrl or Shift (it reports no modifiers), so the page's
+# own JavaScript spots each code typed twice: Ctrl + Shift + H counts in window.treeJumperCheatH,
+# and the old Ctrl + Shift + S counts in window.treeJumperCheatS.
+CHEAT_JS = """
+(function () {
+  if (window.treeJumperCheatH !== undefined) return;
+  window.treeJumperCheatH = 0;
+  window.treeJumperCheatS = 0;
+  var last = { KeyH: -1e9, KeyS: -1e9 };
+  window.addEventListener("keydown", function (e) {
+    if ((e.code !== "KeyH" && e.code !== "KeyS") || !e.ctrlKey || !e.shiftKey) return;
+    e.preventDefault();               // so the browser doesn't use the shortcut itself
+    if (e.repeat) return;
+    var now = performance.now();
+    if (now - last[e.code] <= %d) {
+      if (e.code === "KeyH") window.treeJumperCheatH += 1; else window.treeJumperCheatS += 1;
+      last[e.code] = -1e9;
+    } else {
+      last[e.code] = now;
+    }
+  }, true);
+})();
+""" % int(CHEAT_GAP * 1000)
+
+
+def web_cheat_counts():
+    """How many times (new code, old code) have been typed in the browser; (0, 0) if it can't tell."""
+    try:
+        from platform import window
+        h, s = str(window.eval("window.treeJumperCheatH + ',' + window.treeJumperCheatS")).split(",")
+        return int(h), int(s)
+    except Exception:
+        return 0, 0
 
 
 def http(method, url, body=None):
@@ -304,6 +344,16 @@ class Game:
         self.name_fresh = False
         self.name_time = 0.0
         self.mine = None
+        self.cheat_key = None           # the first key of a cheat code (H or S) ...
+        self.cheat_at = 0.0             # ... and when it was pressed
+        self.web_cheats = (0, 0)        # browser counts (new code, old code) already acted on
+        if WEB:
+            try:
+                from platform import window
+                window.eval(CHEAT_JS)
+                self.web_cheats = web_cheat_counts()
+            except Exception:
+                pass                    # no cheat is worth crashing over
         self.online = None
         self.scores = self.load_scores()
         self.new_run()
@@ -316,6 +366,7 @@ class Game:
         self.cam = float(-FLOOR_ON_SCREEN)     # world y at the top of the screen
         self.top = 0                           # best height this run, in metres
         self.bananas = 0
+        self.bonus = 0                         # extra points from the cheat
         self.zone = 0
         self.branches = []
         start = Branch(W // 2 - 90, START_Y, 180, TREES[1], 0)
@@ -341,7 +392,19 @@ class Game:
 
     @property
     def score(self):
-        return self.top + self.bananas * BANANA_POINTS
+        return self.top + self.bananas * BANANA_POINTS + self.bonus
+
+    def cheat(self):
+        """Ctrl + Shift + H + H: the score jumps to 1236 (climbing on still adds to it)."""
+        self.bonus += CHEAT_SCORE - self.score
+        self.say(f"CHEAT!  {CHEAT_SCORE} POINTS")
+
+    def cheat_code(self, which):
+        """A cheat code was typed: "H" is the real one, "S" is the old one that no longer works."""
+        if which == "H":
+            self.cheat()
+        else:
+            self.say(OLD_CODE_MSG)
 
     def height_of(self, y):
         """Metres climbed when the monkey's feet are at world y."""
@@ -459,6 +522,18 @@ class Game:
             if confirm:
                 self.state = "play"
         elif self.state == "play":
+            # cheat codes on a computer (the browser has its own watcher, see CHEAT_JS)
+            mods = pygame.key.get_mods()
+            which = {pygame.K_h: "H", pygame.K_s: "S"}.get(key)
+            if which and mods & pygame.KMOD_CTRL and mods & pygame.KMOD_SHIFT:
+                if self.cheat_key == which and self.time - self.cheat_at <= CHEAT_GAP:
+                    self.cheat_key = None
+                    self.cheat_code(which)
+                else:
+                    self.cheat_key, self.cheat_at = which, self.time
+                return
+            if key not in (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LSHIFT, pygame.K_RSHIFT):
+                self.cheat_key = None
             if key in (pygame.K_p, pygame.K_ESCAPE):
                 self.paused = not self.paused
         elif self.state == "name":
@@ -509,6 +584,15 @@ class Game:
         self.time += dt
         self.banner_t = max(0, self.banner_t - dt)
         self.shake = max(0, self.shake - dt * 2.5)
+        if WEB:
+            new_code, old_code = web_cheat_counts()
+            done_new, done_old = self.web_cheats
+            self.web_cheats = (new_code, old_code)
+            if self.state == "play":
+                if old_code != done_old:
+                    self.cheat_code("S")
+                if new_code != done_new:
+                    self.cheat_code("H")
         if self.state == "falling":
             self.update_falling(dt)
             return
