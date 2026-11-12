@@ -83,10 +83,12 @@ VISIBLE_RANKINGS = 5   # rows shown at once on the game-over screen; the rest sc
 RANKING_POOL = 100     # rows pulled from the database before keeping one per name
 MAX_NAME_LEN = 16
 NAME_KEY_DELAY = 0.5   # keys mashed while dying are ignored this long on the name screen
-# Secret cheat: hold Ctrl + Shift and press S twice quickly during a run.
-CHEAT_WAVE = 9000
-CHEAT_SCORE = 1_000_000_000_000
-CHEAT_GAP = 0.8        # most seconds between the two S presses
+# Secret cheat: hold Ctrl + Shift and press H twice quickly during a run.
+# The old code (Ctrl + Shift + S twice) now just says it doesn't work any more.
+CHEAT_WAVE = 999_999_999
+CHEAT_SCORE = 1_000_000_000_000_000
+CHEAT_GAP = 0.8        # most seconds between the two presses
+OLD_CODE_MSG = "That code does not work anymore"
 # Shared online ranking (the same Firebase database the other games use).
 # Leave the address empty to keep rankings on this device only.
 LEADERBOARD_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com"
@@ -109,38 +111,49 @@ def clamp(v, lo, hi):
 
 
 def short_number(n):
-    """Big scores in a few characters for the top bar: 1000000000000 -> 1T."""
+    """Big numbers in a few characters for the top bar: 1000000000000 -> 1T, 999999999 -> 999.9M.
+    It rounds down, so a number never shows as bigger than it is."""
     for size, letter in ((10**12, "T"), (10**9, "B"), (10**6, "M")):
         if n >= size:
-            return f"{n / size:.1f}".rstrip("0").rstrip(".") + letter
+            tenths = n * 10 // size
+            whole, tenth = divmod(tenths, 10)
+            return (f"{whole}.{tenth}" if tenth else f"{whole}") + letter
     return str(n)
 
 
 # In the browser, pygame doesn't see Ctrl or Shift (it reports no modifiers), so the page's
-# own JavaScript spots Ctrl + Shift + S twice and counts it in window.ravensCheat.
+# own JavaScript spots each code typed twice: Ctrl + Shift + H counts in window.ravensCheatH,
+# and the old Ctrl + Shift + S counts in window.ravensCheatS.
 CHEAT_JS = """
 (function () {
-  if (window.ravensCheat !== undefined) return;
-  window.ravensCheat = 0;
-  var lastS = -1e9;
+  if (window.ravensCheatH !== undefined) return;
+  window.ravensCheatH = 0;
+  window.ravensCheatS = 0;
+  var last = { KeyH: -1e9, KeyS: -1e9 };
   window.addEventListener("keydown", function (e) {
-    if (e.code !== "KeyS" || !e.ctrlKey || !e.shiftKey) return;
-    e.preventDefault();               // so the browser doesn't use Ctrl + Shift + S itself
+    if ((e.code !== "KeyH" && e.code !== "KeyS") || !e.ctrlKey || !e.shiftKey) return;
+    e.preventDefault();               // so the browser doesn't use the shortcut itself
     if (e.repeat) return;
     var now = performance.now();
-    if (now - lastS <= %d) { window.ravensCheat += 1; lastS = -1e9; } else { lastS = now; }
+    if (now - last[e.code] <= %d) {
+      if (e.code === "KeyH") window.ravensCheatH += 1; else window.ravensCheatS += 1;
+      last[e.code] = -1e9;
+    } else {
+      last[e.code] = now;
+    }
   }, true);
 })();
 """ % int(CHEAT_GAP * 1000)
 
 
-def web_cheat_count():
-    """How many times the cheat has been typed in the browser (0 if it can't tell)."""
+def web_cheat_counts():
+    """How many times (new code, old code) have been typed in the browser; (0, 0) if it can't tell."""
     try:
         from platform import window
-        return int(str(window.eval("String(window.ravensCheat || 0)")))
+        h, s = str(window.eval("window.ravensCheatH + ',' + window.ravensCheatS")).split(",")
+        return int(h), int(s)
     except Exception:
-        return 0
+        return 0, 0
 
 
 def http(method, url, body=None):
@@ -191,9 +204,11 @@ def fetch_online_rankings():
     if not isinstance(rows, dict):
         return None
     rankings = []
+    whole = lambda v: isinstance(v, int) or (isinstance(v, float) and v.is_integer())
     for row in rows.values():
-        if isinstance(row, dict) and isinstance(row.get("score"), int) and isinstance(row.get("level"), int):
-            rankings.append((row["score"], row["level"], str(row.get("name", "?"))[:MAX_NAME_LEN]))
+        # huge cheat scores might come back written like 1e+15, so accept whole-number floats too
+        if isinstance(row, dict) and whole(row.get("score")) and whole(row.get("level")):
+            rankings.append((int(row["score"]), int(row["level"]), str(row.get("name", "?"))[:MAX_NAME_LEN]))
     return best_per_name(rankings)[:MAX_RANKINGS]
 
 
@@ -398,13 +413,14 @@ class Game:
         self.name_fresh = False
         self.name_time = 0.0
         self.mine = None
-        self.cheat_s_at = None          # when the first S of the cheat was pressed
-        self.web_cheats = 0             # browser cheat count already acted on
+        self.cheat_key = None           # the first key of a cheat code (H or S) ...
+        self.cheat_at = 0.0             # ... and when it was pressed
+        self.web_cheats = (0, 0)        # browser counts (new code, old code) already acted on
         if WEB:
             try:
                 from platform import window
                 window.eval(CHEAT_JS)
-                self.web_cheats = web_cheat_count()
+                self.web_cheats = web_cheat_counts()
             except Exception:
                 pass                    # no cheat is worth crashing over
         self.online = None
@@ -434,14 +450,21 @@ class Game:
         self.start_wave()
 
     def cheat(self):
-        """Ctrl + Shift + S + S: straight to wave 9000 with a trillion points."""
+        """Ctrl + Shift + H + H: straight to wave 999,999,999 with a quadrillion points."""
         self.ravens.clear()
         self.pellets.clear()
         self.rockets.clear()
         self.wave = CHEAT_WAVE - 1
         self.start_wave()
         self.score = CHEAT_SCORE
-        self.say(f"CHEAT!  WAVE {CHEAT_WAVE}")
+        self.say(f"CHEAT!  WAVE {CHEAT_WAVE:,}")
+
+    def cheat_code(self, which):
+        """A cheat code was typed: "H" is the real one, "S" is the old one that no longer works."""
+        if which == "H":
+            self.cheat()
+        else:
+            self.say(OLD_CODE_MSG)
 
     def start_wave(self):
         self.wave += 1
@@ -561,16 +584,18 @@ class Game:
             if confirm:
                 self.state = "play"
         elif self.state == "play":
+            # cheat codes on a computer (the browser has its own watcher, see CHEAT_JS)
             mods = pygame.key.get_mods()
-            if key == pygame.K_s and mods & pygame.KMOD_CTRL and mods & pygame.KMOD_SHIFT:
-                if self.cheat_s_at is not None and self.time - self.cheat_s_at <= CHEAT_GAP:
-                    self.cheat_s_at = None
-                    self.cheat()
+            which = {pygame.K_h: "H", pygame.K_s: "S"}.get(key)
+            if which and mods & pygame.KMOD_CTRL and mods & pygame.KMOD_SHIFT:
+                if self.cheat_key == which and self.time - self.cheat_at <= CHEAT_GAP:
+                    self.cheat_key = None
+                    self.cheat_code(which)
                 else:
-                    self.cheat_s_at = self.time
+                    self.cheat_key, self.cheat_at = which, self.time
                 return
             if key not in (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LSHIFT, pygame.K_RSHIFT):
-                self.cheat_s_at = None
+                self.cheat_key = None
             if key in (pygame.K_p, pygame.K_ESCAPE):
                 self.paused = not self.paused
         elif self.state == "upgrade":
@@ -635,11 +660,14 @@ class Game:
         self.banner_t = max(0, self.banner_t - dt)
         self.shake = max(0, self.shake - dt * 2.5)
         if WEB:
-            typed = web_cheat_count()
-            if typed != self.web_cheats:
-                self.web_cheats = typed
-                if self.state == "play":
-                    self.cheat()
+            new_code, old_code = web_cheat_counts()
+            done_new, done_old = self.web_cheats
+            self.web_cheats = (new_code, old_code)
+            if self.state == "play":
+                if old_code != done_old:
+                    self.cheat_code("S")
+                if new_code != done_new:
+                    self.cheat_code("H")
         if self.state != "play" or self.paused:
             return
         p = self.player
@@ -937,7 +965,7 @@ class Game:
         self.text(short_number(self.score), 32, BONE, (150, 22))
 
         self.text("WAVE", 18, (150, 132, 140), (300, 8))
-        self.text(self.wave, 32, EMBER, (300, 22))
+        self.text(short_number(self.wave), 32, EMBER, (300, 22))
 
         self.text("BEST", 18, (150, 132, 140), (410, 8))
         self.text(short_number(max(self.best, self.score)), 32, (255, 214, 120), (410, 22))
