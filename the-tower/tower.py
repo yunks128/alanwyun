@@ -1,4 +1,4 @@
-"""The Tower - climb 50 stories of ghosts, lava pools and flamethrowers.
+"""The Tower - climb 100 stories of ghosts, lava pools, flamethrowers, turrets and falling platforms.
 
 Controls
     Left / Right arrows   move
@@ -26,7 +26,7 @@ W, H = 960, 600
 FPS = 60
 CEIL_Y = 70            # bottom edge of the ceiling / HUD strip
 FLOOR_Y = 500          # top edge of the floor
-TOP_STORY = 50
+TOP_STORY = 100
 
 PW, PH = 28, 44        # player size
 SPEED = 250
@@ -57,6 +57,15 @@ LAVA_DEPTH = 20        # how far below the floor the lava surface sits
 FLAME_PERIOD = 2.0     # a flamethrower fires once every 2 seconds
 FLAME_ON = 0.7         # ...and each burst lasts this long
 FLAME_WARN = 0.4       # nozzle glows this long before a burst
+TURRET_EVERY = 7.0     # a turret on the left wall shoots an arrow across the room every 7 seconds
+TURRET_FIRST = 4.0     # ...the first one comes this long into the story
+TURRET_WARN = 0.8      # its muzzle glows this long before it shoots
+ARROW_SPEED = 480
+ARROW_Y = FLOOR_Y - 16  # arrows fly low, so you can jump over them
+PLATFORM_W, PLATFORM_H = 90, 16
+PLATFORM_LIFT = 30     # falling platforms hover this far above the floor, over a lava pool
+PLATFORM_DELAY = 1.5   # a platform falls this long after you step on it
+PLATFORM_BACK = 2.0    # ...and floats back up this long after it has dropped out of sight
 
 LEN_COSTS = [25, 50, 90, 140]
 SWORD_DMG = [2, 3, 5, 7, 10, 14]
@@ -73,14 +82,52 @@ SWING_COOLDOWN = 0.38
 
 
 def story_rules(story):
-    """Return (ghost count, has lava pool, has flamethrower) for a story."""
+    """Return (ghost count, has lava pool, flamethrowers, has turret, has falling platforms) for a story."""
+    chance = random.random
     if story < 3:
-        return random.randint(2, 3), random.random() < 0.35, False
+        return random.randint(2, 3), chance() < 0.35, 0, False, False
     if story < 10:
-        return random.randint(2, 3), random.random() < 0.35, True
+        return random.randint(2, 3), chance() < 0.35, 1, False, False
     if story <= 20:
-        return 3, random.random() < 0.25, True
-    return random.randint(1, 5), random.random() < 0.40, random.random() < 0.50
+        return 3, chance() < 0.25, 1, False, False
+    if story < 50:
+        return random.randint(1, 5), chance() < 0.40, int(chance() < 0.50), False, False
+    lava, flames, turret, platforms = chance() < 0.40, int(chance() < 0.50), False, False
+    if story <= 80:
+        ghosts = 5 if chance() < 0.85 else 4
+    else:
+        ghosts = 8
+        if chance() < 0.60:
+            flames = 2
+    if story >= 85 and chance() < 0.20:
+        platforms = lava = True         # falling platforms hover over a lava pool, so no turret
+    elif story >= 61:
+        turret = chance() < (0.65 if story <= 80 else 0.80)
+    if turret:
+        lava = False                    # never a lava pool and a turret on the same story
+    return ghosts, lava, flames, turret, platforms
+
+
+class FallingPlatform:
+    """Hovers over the lava, and drops PLATFORM_DELAY seconds after you step on it."""
+
+    def __init__(self, x):
+        self.home = (x, FLOOR_Y - PLATFORM_LIFT)
+        self.reset()
+
+    def reset(self):
+        self.x, self.y = map(float, self.home)
+        self.vy = 0.0
+        self.state = "still"            # still, shaking, falling, gone
+        self.timer = 0.0
+
+    @property
+    def rect(self):
+        return pygame.Rect(round(self.x), round(self.y), PLATFORM_W, PLATFORM_H)
+
+    @property
+    def solid(self):
+        return self.state in ("still", "shaking")
 
 
 class Player:
@@ -167,46 +214,67 @@ class Ghost:
 class Level:
     def __init__(self, story):
         self.story = story
-        n_ghosts, has_lava, has_flame = story_rules(story)
+        n_ghosts, has_lava, n_flames, has_turret, has_platforms = story_rules(story)
         self.pool = None
         self.rocks = []
-        self.flame_x = None
+        self.platforms = []
+        self.flames = []                 # x of each flamethrower; they all fire together
         self.flame_t = 0.0
+        self.turret = has_turret
+        self.turret_t = TURRET_FIRST     # time until the next arrow
+        self.arrows = []                 # x of each arrow flying across the room
 
         if has_lava:
-            w = random.choice((300, 340, 380))
-            if not has_flame:
-                px = random.randint(220, 780 - w)
-            elif random.random() < 0.5:
-                px = random.randint(190, 230)
-                self.flame_x = random.randint(px + w + 70, 800)
-            else:
-                self.flame_x = random.randint(190, 260)
-                px = random.randint(self.flame_x + 70, 800 - w)
+            w = random.choice((340, 380) if has_platforms else (300, 340, 380))
+            px, self.flames = self.place_flames(n_flames, w)
             self.pool = pygame.Rect(px, FLOOR_Y, w, H - FLOOR_Y)
-            n = 3 if w >= 380 else 2
-            gap = (w - n * ROCK_W) / (n + 1)
-            for i in range(n):
-                top = FLOOR_Y - random.choice((0, 8, 16))
-                rx = round(px + gap * (i + 1) + ROCK_W * i)
-                self.rocks.append(pygame.Rect(rx, top, ROCK_W, H - top))
-        elif has_flame:
-            self.flame_x = random.randint(250, 780)
+            if has_platforms:
+                # two falling platforms instead of rocks: keep moving or drop into the lava
+                gap = (w - 2 * PLATFORM_W) / 3
+                self.platforms = [FallingPlatform(round(px + gap * (i + 1) + PLATFORM_W * i)) for i in range(2)]
+            else:
+                n = 3 if w >= 380 else 2
+                gap = (w - n * ROCK_W) / (n + 1)
+                for i in range(n):
+                    top = FLOOR_Y - random.choice((0, 8, 16))
+                    rx = round(px + gap * (i + 1) + ROCK_W * i)
+                    self.rocks.append(pygame.Rect(rx, top, ROCK_W, H - top))
+        elif n_flames:
+            _, self.flames = self.place_flames(n_flames, 0)
 
         if self.pool:
             self.floors = [pygame.Rect(0, FLOOR_Y, self.pool.left, H - FLOOR_Y),
                            pygame.Rect(self.pool.right, FLOOR_Y, W - self.pool.right, H - FLOOR_Y)]
         else:
             self.floors = [pygame.Rect(0, FLOOR_Y, W, H - FLOOR_Y)]
-        self.solids = self.floors + self.rocks
+        self.solids = self.floors + self.rocks        # the platforms are added while they hold
 
         self.door = pygame.Rect(W - 66, FLOOR_Y - 80, 46, 80)
         self.ghosts = [Ghost(random.randint(420, 880), random.randint(CEIL_Y + 60, FLOOR_Y - 80), story)
                        for _ in range(n_ghosts)]
 
-    @property
-    def flame_rect(self):
-        return pygame.Rect(self.flame_x - 22, CEIL_Y + 36, 44, FLOOR_Y - CEIL_Y - 36)
+    @staticmethod
+    def place_flames(count, pool_w):
+        """Pick where a lava pool that wide starts (if any) and where the flamethrowers go:
+        well clear of the pool and of each other. Returns (pool x, flamethrower xs)."""
+        while count:
+            for _ in range(300):
+                px = random.randint(220, 780 - pool_w) if pool_w else -1000
+                xs = sorted(random.randint(190 if pool_w else 250, 800 if pool_w else 780) for _ in range(count))
+                apart = all(b - a >= 150 for a, b in zip(xs, xs[1:]))
+                clear = all(x < px - 70 or x > px + pool_w + 70 for x in xs)
+                if apart and clear:
+                    return px, xs
+            count -= 1                   # no room for that many; try one fewer
+        return random.randint(220, 780 - pool_w) if pool_w else -1000, []
+
+    def solid_now(self):
+        """What you can stand on right now: the floor, rocks and any platform still hovering."""
+        return self.solids + [plat.rect for plat in self.platforms if plat.solid]
+
+    @staticmethod
+    def flame_rect(x):
+        return pygame.Rect(x - 22, CEIL_Y + 36, 44, FLOOR_Y - CEIL_Y - 36)
 
     @property
     def flame_phase(self):
@@ -316,11 +384,20 @@ class Game:
         self.coins = 0
         self.score = 0
         self.cause = ""
+        self.seen = set()            # new obstacles already explained this run
         self.start_story()
 
     def start_story(self):
         self.level = Level(self.story)
         self.player.place(40)
+        # the first turret or falling platform of a run comes with a hint
+        self.hints = []
+        for kind, present, hint in (("turret", self.level.turret, "Turret! Jump over its arrows"),
+                                    ("platform", self.level.platforms,
+                                     "Falling platforms drop 1.5 seconds after you step on them")):
+            if present and kind not in self.seen:
+                self.seen.add(kind)
+                self.hints.append(hint)
         self.lasers = []
         self.particles = []
         self.popups = []
@@ -584,7 +661,8 @@ class Game:
         if keys[pygame.K_UP] and p.on_ground:
             p.vy = -JUMP
         p.vy += GRAVITY * dt
-        p.move(direction * SPEED * dt, p.vy * dt, lv.solids)
+        p.move(direction * SPEED * dt, p.vy * dt, lv.solid_now())
+        self.update_platforms(dt)
         p.cooldown = max(0, p.cooldown - dt)
         p.swing = max(0, p.swing - dt)
         p.invuln = max(0, p.invuln - dt)
@@ -600,10 +678,24 @@ class Game:
             p.place(lv.pool.left - PW - 6 if r.centerx < lv.pool.centerx else lv.pool.right + 6)
             p.invuln = SHIELD_GRACE
             return
-        if lv.flame_x is not None:
+        if lv.flames:
             lv.flame_t += dt
-            if lv.flame_phase == "on" and r.colliderect(lv.flame_rect.inflate(-8, 0)):
+            if lv.flame_phase == "on" and any(r.colliderect(lv.flame_rect(x).inflate(-8, 0)) for x in lv.flames):
                 self.hurt("A flamethrower roasted you.")
+                if self.state != "play":
+                    return
+        if lv.turret:
+            lv.turret_t -= dt
+            if lv.turret_t <= 0:
+                lv.turret_t += TURRET_EVERY
+                lv.arrows.append(40.0)
+            for i, x in enumerate(lv.arrows):
+                lv.arrows[i] = x + ARROW_SPEED * dt
+            lv.arrows = [x for x in lv.arrows if x < W + 40]
+            hit = next((x for x in lv.arrows if r.colliderect(pygame.Rect(x - 30, ARROW_Y - 3, 34, 6))), None)
+            if hit is not None:
+                lv.arrows.remove(hit)
+                self.hurt("A turret arrow got you.")
                 if self.state != "play":
                     return
 
@@ -682,6 +774,28 @@ class Game:
                 self.ask_name("win")
             else:
                 self.state = "shop"
+
+    def update_platforms(self, dt):
+        """Start a platform's countdown when you land on it; drop it, then bring it back later."""
+        p = self.player
+        feet = p.rect.move(0, 1)
+        for plat in self.level.platforms:
+            if plat.state == "still" and p.on_ground and feet.colliderect(plat.rect):
+                plat.state, plat.timer = "shaking", PLATFORM_DELAY
+            elif plat.state == "shaking":
+                plat.timer -= dt
+                if plat.timer <= 0:
+                    plat.state = "falling"
+            elif plat.state == "falling":
+                plat.vy += GRAVITY * dt
+                plat.y += plat.vy * dt
+                if plat.y > H:
+                    plat.state, plat.timer = "gone", PLATFORM_BACK
+            elif plat.state == "gone":
+                plat.timer -= dt
+                home = pygame.Rect(*plat.home, PLATFORM_W, PLATFORM_H)
+                if plat.timer <= 0 and not home.colliderect(p.rect):
+                    plat.reset()
 
     def hit_ghost(self, g, dmg, direction):
         g.hp -= dmg
@@ -796,11 +910,11 @@ class Game:
         scr.blit(self.backdrop, (0, 0))
         self.dim(120)
         self.text("THE TOWER", 120, (255, 220, 90), (W // 2, 130), "center")
-        self.text(f"Climb {TOP_STORY} stories of ghosts, lava and flamethrowers to escape.", 30,
+        self.text(f"Climb {TOP_STORY} stories of ghosts, lava, flames and turrets to escape.", 30,
                   (225, 225, 240), (W // 2, 215), "center")
         lines = [
             ("Left / Right", "move"),
-            ("Up", "jump (hop across lava on the rocks)"),
+            ("Up", "jump (hop across lava, leap over arrows)"),
             ("Space", "swing your sword or fire your laser gun"),
             ("Q", "swap weapons once you own a laser gun"),
             ("P", "pause"),
@@ -810,7 +924,7 @@ class Game:
             self.text(k, 28, (140, 220, 255), (W // 2 - 20, y), "topright")
             self.text(what, 28, (225, 225, 240), (W // 2 + 4, y))
         self.text("Defeat every ghost on a story to unlock the stairs.", 26, (190, 190, 210), (W // 2, 478), "center")
-        self.text("One touch from a ghost, lava or a flame and the run is over.", 26, (255, 150, 140), (W // 2, 506), "center")
+        self.text("One touch from a ghost, lava, a flame or an arrow and the run is over.", 26, (255, 150, 140), (W // 2, 506), "center")
         if self.rankings():
             score, _, name = self.rankings()[0]
             self.text(f"High score: {score}" + (f" by {name}" if name else ""), 26, (255, 225, 110), (W // 2, 248), "center")
@@ -851,6 +965,34 @@ class Game:
             pygame.draw.rect(scr, (74, 68, 90), f)
             pygame.draw.rect(scr, (112, 104, 132), (f.x, f.y, f.w, 6))
 
+        # falling platforms over the lava: they shake once you have stepped on them
+        for plat in lv.platforms:
+            if plat.state == "gone":
+                continue
+            pr = plat.rect
+            if plat.state == "shaking":
+                pr = pr.move(random.randint(-2, 2), random.randint(-1, 1))
+            pygame.draw.rect(scr, (104, 80, 62), pr, border_radius=4)
+            pygame.draw.rect(scr, (150, 120, 92), (pr.x, pr.y, pr.w, 5), border_radius=4)
+            for k in (1, 2):
+                pygame.draw.line(scr, (70, 52, 40), (pr.x + pr.w * k // 3, pr.y + 5), (pr.x + pr.w * k // 3, pr.bottom - 2), 2)
+            if plat.state == "still":       # a faint glow underneath, as if it floats on the heat
+                pygame.draw.ellipse(scr, (255, 150, 60), (pr.x + 10, pr.bottom + 4, pr.w - 20, 6), 1)
+
+        # turret on the left wall, and its arrows
+        if lv.turret:
+            pygame.draw.rect(scr, (60, 62, 74), (0, ARROW_Y - 26, 26, 46), border_radius=3)
+            pygame.draw.rect(scr, (110, 114, 130), (0, ARROW_Y - 26, 26, 6), border_radius=3)
+            pygame.draw.rect(scr, (90, 94, 108), (26, ARROW_Y - 6, 16, 12), border_radius=2)
+            if lv.turret_t <= TURRET_WARN and int(self.time * 16) % 2:
+                pygame.draw.circle(scr, (255, 90, 70), (42, ARROW_Y), 6)
+            for x in lv.arrows:
+                pygame.draw.line(scr, (150, 110, 60), (x - 30, ARROW_Y), (x, ARROW_Y), 3)
+                pygame.draw.polygon(scr, (210, 214, 226), [(x + 8, ARROW_Y), (x, ARROW_Y - 5), (x, ARROW_Y + 5)])
+                for k in (0, 6):
+                    pygame.draw.line(scr, (230, 70, 70), (x - 30 + k, ARROW_Y), (x - 36 + k, ARROW_Y - 5), 2)
+                    pygame.draw.line(scr, (230, 70, 70), (x - 30 + k, ARROW_Y), (x - 36 + k, ARROW_Y + 5), 2)
+
         # door / stairs up
         d = lv.door
         opened = not lv.ghosts
@@ -868,12 +1010,11 @@ class Game:
             pygame.draw.rect(scr, (200, 60, 60), (d.centerx - 7, d.centery - 4, 14, 12), border_radius=2)
             pygame.draw.arc(scr, (200, 60, 60), (d.centerx - 6, d.centery - 13, 12, 16), 0, math.pi, 3)
 
-        # flamethrower
-        if lv.flame_x is not None:
-            fx = lv.flame_x
+        # flamethrowers
+        for fx in lv.flames:
             phase = lv.flame_phase
             if phase == "on":
-                fr = lv.flame_rect
+                fr = lv.flame_rect(fx)
                 for _ in range(46):
                     k = random.random()
                     y = fr.top + k * fr.h
@@ -901,6 +1042,8 @@ class Game:
         if self.story == 1 and lv.ghosts:
             self.text("Arrow keys: move and jump     Space: attack", 24, (200, 200, 220), (W // 2, 110), "center")
             self.text("Defeat every ghost to unlock the stairs", 24, (200, 200, 220), (W // 2, 136), "center")
+        for i, hint in enumerate(self.hints):
+            self.text(hint, 26, (255, 200, 120), (W // 2, 110 + i * 28), "center")
         if self.banner > 0 and self.state == "play":
             img = self.fonts[96].render(f"STORY {self.story}", True, (255, 255, 255))
             img.set_alpha(int(255 * min(1, self.banner)))
