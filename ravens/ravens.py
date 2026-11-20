@@ -89,6 +89,10 @@ CHEAT_WAVE = 999_999_999
 CHEAT_SCORE = 1_000_000_000_000_000
 CHEAT_GAP = 0.8        # most seconds between the two presses
 OLD_CODE_MSG = "That code does not work anymore"
+# If the shared ranking turns a run down for being too big (its rule in firebase-rules.json
+# hasn't been published yet), the run is sent again capped to what the older rule takes.
+FALLBACK_SCORE = 9_999_999_999_999     # older rule: scores under 10 trillion...
+FALLBACK_WAVE = 99_999                 # ...and waves under 100,000
 # Shared online ranking (the same Firebase database the other games use).
 # Leave the address empty to keep rankings on this device only.
 LEADERBOARD_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com"
@@ -559,10 +563,19 @@ class Game:
         if not LEADERBOARD_URL:
             return
 
+        def post(entry):
+            return http("POST", LEADERBOARD_URL + LEADERBOARD_PATH, json.dumps(entry)) is not None
+
         def work():
             rankings = None
-            if not new_entry or http("POST", LEADERBOARD_URL + LEADERBOARD_PATH,
-                                     json.dumps(new_entry)) is not None:
+            saved = not new_entry or post(new_entry)
+            if not saved and (new_entry["score"] > FALLBACK_SCORE or new_entry["level"] > FALLBACK_WAVE):
+                capped = dict(new_entry, score=min(new_entry["score"], FALLBACK_SCORE),
+                              level=min(new_entry["level"], FALLBACK_WAVE))
+                saved = post(capped)
+                if saved:               # so your row is still the one picked out in gold
+                    self.mine = (capped["score"], capped["level"], capped["name"])
+            if saved:
                 rankings = fetch_online_rankings()
             self.online = rankings
             print("online ranking:", "unavailable" if rankings is None else f"{len(rankings)} scores")
