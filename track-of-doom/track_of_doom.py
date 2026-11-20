@@ -97,6 +97,10 @@ VISIBLE_RANKINGS = 5   # rows shown at once on the game-over screen; the rest sc
 RANKING_POOL = 100     # rows pulled from the database before keeping one per name
 MAX_NAME_LEN = 16
 NAME_KEY_DELAY = 0.5   # keys mashed as time ran out are ignored this long on the name screen
+# Secret cheat: hold Ctrl + Shift and press H twice quickly during a race.
+CHEAT_SCORE = 500_000
+CHEAT_GAP = 0.8        # most seconds between the two presses
+TOP_SCORE = 999_999    # the most the shared ranking accepts (its rule wants under 1,000,000)
 # Shared online ranking (the same Firebase database the other games use).
 # Leave the address empty to keep rankings on this device only.
 LEADERBOARD_URL = "https://alien-boom-boom-default-rtdb.firebaseio.com"
@@ -132,6 +136,38 @@ def lerp(a, b, t):
 
 def mix(c1, c2, t):
     return tuple(int(lerp(a, b, t)) for a, b in zip(c1, c2))
+
+
+# In the browser, pygame doesn't see Ctrl or Shift (it reports no modifiers), so the page's
+# own JavaScript spots the code typed twice and counts it in window.trackOfDoomCheat.
+CHEAT_JS = """
+(function () {
+  if (window.trackOfDoomCheat !== undefined) return;
+  window.trackOfDoomCheat = 0;
+  var last = -1e9;
+  window.addEventListener("keydown", function (e) {
+    if (e.code !== "KeyH" || !e.ctrlKey || !e.shiftKey) return;
+    e.preventDefault();               // so the browser doesn't use the shortcut itself
+    if (e.repeat) return;
+    var now = performance.now();
+    if (now - last <= %d) {
+      window.trackOfDoomCheat += 1;
+      last = -1e9;
+    } else {
+      last = now;
+    }
+  }, true);
+})();
+""" % int(CHEAT_GAP * 1000)
+
+
+def web_cheat_count():
+    """How many times the code has been typed in the browser; 0 if it can't tell."""
+    try:
+        from platform import window
+        return int(str(window.eval("window.trackOfDoomCheat")))
+    except Exception:
+        return 0
 
 
 def http(method, url, body=None):
@@ -341,6 +377,15 @@ class Game:
         self.name_fresh = False
         self.name_time = 0.0
         self.mine = None
+        self.cheat_at = None            # when the first Ctrl + Shift + H was pressed
+        self.web_cheats = 0             # browser count already acted on
+        if WEB:
+            try:
+                from platform import window
+                window.eval(CHEAT_JS)
+                self.web_cheats = web_cheat_count()
+            except Exception:
+                pass                    # no cheat is worth crashing over
         self.online = None
         self.scores = self.load_scores()
         self.new_run()
@@ -357,6 +402,7 @@ class Game:
         self.far = 0.0                 # furthest along the track you have driven
         self.level = 1
         self.coins = 0
+        self.bonus = 0                 # extra points from the cheat
         self.crashes = 0
         self.time_left = START_TIME
         self.race_t = 0.0              # drives the smashers; stops while paused
@@ -381,7 +427,12 @@ class Game:
 
     @property
     def score(self):
-        return int(self.far / PX_PER_M) + self.coins * COIN_POINTS
+        return int(self.far / PX_PER_M) + self.coins * COIN_POINTS + self.bonus
+
+    def cheat(self):
+        """Ctrl + Shift + H + H: the score jumps to 500,000 (driving on still adds to it)."""
+        self.bonus += max(0, CHEAT_SCORE - self.score)
+        self.say("CHEAT!  500,000")
 
     def grow_track(self):
         """Lay down whole levels until the track reaches well past the car."""
@@ -515,8 +566,9 @@ class Game:
         """Add this run to this device's top scores and to the shared ranking."""
         self.name = self.name.strip() or random.choice(FUN_NAMES)
         level = clamp(self.level, 1, 999)       # the database keeps this between 1 and 999
-        self.mine = (self.score, level, self.name)
-        self.new_best = self.score > self.best
+        score = min(self.score, TOP_SCORE)      # ...and the score under a million
+        self.mine = (score, level, self.name)
+        self.new_best = score > self.best
         self.scores = best_per_name(self.scores + [self.mine])[:MAX_RANKINGS]
         try:
             save = json.dumps({"scores": self.scores, "name": self.name})
@@ -528,7 +580,7 @@ class Game:
                     f.write(save)
         except Exception:
             pass       # a high score is never worth crashing over
-        self.refresh_online({"name": self.name, "score": self.score, "level": level})
+        self.refresh_online({"name": self.name, "score": score, "level": level})
         self.scroll = 0
         self.scroll_follow = True
         self.state = "dead"
@@ -564,6 +616,17 @@ class Game:
                 self.state = "play"
                 self.say("LEVEL 1")
         elif self.state == "play":
+            # the cheat code on a computer (the browser has its own watcher, see CHEAT_JS)
+            mods = pygame.key.get_mods()
+            if key == pygame.K_h and mods & pygame.KMOD_CTRL and mods & pygame.KMOD_SHIFT:
+                if self.cheat_at is not None and self.time - self.cheat_at <= CHEAT_GAP:
+                    self.cheat_at = None
+                    self.cheat()
+                else:
+                    self.cheat_at = self.time
+                return
+            if key not in (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LSHIFT, pygame.K_RSHIFT):
+                self.cheat_at = None
             if key in (pygame.K_p, pygame.K_ESCAPE):
                 self.paused = not self.paused
             elif self.paused and key == pygame.K_e:
@@ -620,6 +683,11 @@ class Game:
         self.time += dt
         self.banner_t = max(0, self.banner_t - dt)
         self.shake = max(0, self.shake - dt * 2.5)
+        if WEB:
+            count = web_cheat_count()
+            typed, self.web_cheats = count != self.web_cheats, count
+            if typed and self.state == "play":
+                self.cheat()
         if self.state == "title":
             self.race_t += dt
             return
