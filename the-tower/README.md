@@ -20,6 +20,15 @@ The shop opens every time you clear a story. Alongside the sword upgrades and la
 there is a **shield for 20 coins**: it soaks up one hit, so it takes two to end your run.
 You can only carry one at a time, and the price never goes up however high you climb.
 
+From **story 51** the shop sells upgrades for the top half of the tower:
+
+- **Sharper sword** goes past damage 14 with three new levels: 19, 25 and 32 (340, 460 and 600 coins).
+- **Faster sword** (new) cuts the wait between swings from 0.38s to 0.31s, 0.25s and then 0.2s
+  (220, 360 and 520 coins).
+
+Coins get scarcer up there too: from story 51 a ghost drops **half as many coins** as it
+would lower down (about 30 coins on story 51, up to 54 on story 100).
+
 **Play in the browser:** https://alanwyun.com/the-tower/
 
 ## Controls

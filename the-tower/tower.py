@@ -68,8 +68,13 @@ PLATFORM_DELAY = 1.5   # a platform falls this long after you step on it
 PLATFORM_BACK = 2.0    # ...and floats back up this long after it has dropped out of sight
 
 LEN_COSTS = [25, 50, 90, 140]
-SWORD_DMG = [2, 3, 5, 7, 10, 14]
-DMG_COSTS = [30, 60, 110, 170, 250]
+SWORD_DMG = [2, 3, 5, 7, 10, 14, 19, 25, 32]
+DMG_COSTS = [30, 60, 110, 170, 250, 340, 460, 600]
+HIGH_UPGRADE_STORY = 51   # the extra sharpness levels and the faster sword appear in the shop from here
+LOW_DMG_LEVELS = 5        # sharpness levels you can buy before HIGH_UPGRADE_STORY
+SWING_COOLDOWNS = [0.38, 0.31, 0.25, 0.2]   # time between sword swings for each "faster sword" level
+SPEED_COSTS = [220, 360, 520]
+HIGH_REWARD_SCALE = 0.5  # ghosts drop half as many coins from HIGH_UPGRADE_STORY up
 DOUBLE_COST = 80
 SHIELD_COST = 20       # the shield always costs this much, however high you climb
 SHIELD_GRACE = 1.2     # after the shield soaks a hit you are safe this long while you get clear
@@ -78,7 +83,6 @@ GUNS = {
     "rifle": dict(name="Laser Rifle", cost=260, dmg=6, cooldown=0.5, color=(255, 90, 220)),
 }
 SWING_TIME = 0.2
-SWING_COOLDOWN = 0.38
 
 
 def story_rules(story):
@@ -134,6 +138,7 @@ class Player:
     def __init__(self):
         self.len_lvl = 0
         self.dmg_lvl = 0
+        self.speed_lvl = 0
         self.double = False
         self.guns = []
         self.weapon = "sword"
@@ -595,11 +600,25 @@ class Game:
         else:
             items.append(("Bigger sword", "MAX", None, None, "Your sword is as big as it gets."))
 
-        if p.dmg_lvl < len(DMG_COSTS):
+        high = self.story >= HIGH_UPGRADE_STORY
+        dmg_cap = len(DMG_COSTS) if high else LOW_DMG_LEVELS
+        if p.dmg_lvl < dmg_cap:
             items.append(("Sharper sword", f"damage {SWORD_DMG[p.dmg_lvl]} > {SWORD_DMG[p.dmg_lvl + 1]}",
                           DMG_COSTS[p.dmg_lvl], bump("dmg_lvl"), "Each swing does more damage."))
-        else:
+        elif high:
             items.append(("Sharper sword", "MAX", None, None, "Your sword is as sharp as it gets."))
+        else:
+            items.append(("Sharper sword", "MAX", None, None,
+                          f"Even sharper blades are sold from story {HIGH_UPGRADE_STORY}."))
+
+        if high:
+            if p.speed_lvl < len(SPEED_COSTS):
+                items.append(("Faster sword", f"speed {p.speed_lvl + 1} > {p.speed_lvl + 2}",
+                              SPEED_COSTS[p.speed_lvl], bump("speed_lvl"),
+                              f"Swing more often: {SWING_COOLDOWNS[p.speed_lvl]}s > "
+                              f"{SWING_COOLDOWNS[p.speed_lvl + 1]}s between swings."))
+            else:
+                items.append(("Faster sword", "MAX", None, None, "Your sword swings as fast as it gets."))
 
         if not p.double:
             items.append(("Double strike", "", DOUBLE_COST, lambda: setattr(p, "double", True),
@@ -704,7 +723,7 @@ class Game:
             if p.weapon == "sword":
                 p.swing = SWING_TIME
                 p.swing_hits = []
-                p.cooldown = SWING_COOLDOWN
+                p.cooldown = SWING_COOLDOWNS[p.speed_lvl]
             else:
                 gun = GUNS[p.weapon]
                 p.cooldown = gun["cooldown"]
@@ -805,6 +824,8 @@ class Game:
         if g.hp <= 0:
             self.level.ghosts.remove(g)
             reward = 8 + self.story
+            if self.story >= HIGH_UPGRADE_STORY:
+                reward = round(reward * HIGH_REWARD_SCALE)
             self.coins += reward
             self.score += GHOST_POINTS
             self.burst(g.x, g.y, (210, 230, 255), 22)
@@ -1094,7 +1115,8 @@ class Game:
                 angle = math.radians(-62)
             tip = (hand[0] + f * math.cos(angle) * p.blade, hand[1] + math.sin(angle) * p.blade)
             steel = [(210, 214, 226), (190, 230, 255), (140, 255, 200), (255, 230, 120),
-                     (255, 160, 90), (255, 110, 200)][p.dmg_lvl]
+                     (255, 160, 90), (255, 110, 200), (180, 120, 255), (120, 255, 255),
+                     (255, 255, 255)][p.dmg_lvl]
             pygame.draw.line(scr, steel, hand, tip, 4 + p.dmg_lvl // 2)
             guard = (hand[0] + f * math.cos(angle) * 6, hand[1] + math.sin(angle) * 6)
             nx, ny = -math.sin(angle) * 6, f * math.cos(angle) * 6
@@ -1133,9 +1155,10 @@ class Game:
         self.text(str(self.coins), 34, (255, 225, 110), (418, 21))
 
         if p.weapon == "sword":
-            extra = ", double strike" if p.double else ""
+            extra = (f", speed {p.speed_lvl + 1}" if p.speed_lvl else "") + (", double" if p.double else "")
+            dmg = "dmg" if p.speed_lvl else "damage"     # keep the line clear of the shield badge
             self.text("Sword", 30, (255, 255, 255), (530, 10))
-            self.text(f"size {p.len_lvl + 1}, damage {SWORD_DMG[p.dmg_lvl]}{extra}", 20, (170, 170, 190), (530, 36))
+            self.text(f"size {p.len_lvl + 1}, {dmg} {SWORD_DMG[p.dmg_lvl]}{extra}", 20, (170, 170, 190), (530, 36))
         else:
             gun = GUNS[p.weapon]
             self.text(gun["name"], 30, gun["color"], (530, 10))
@@ -1143,8 +1166,8 @@ class Game:
             ready = 1 - p.cooldown / gun["cooldown"]
             pygame.draw.rect(scr, gun["color"] if ready >= 1 else (150, 150, 160), (530, 40, 120 * ready, 8), border_radius=3)
         if p.shield:
-            self.shield_badge((706, 32))
-            self.text("SHIELD", 22, (150, 225, 255), (722, 22))
+            self.shield_badge((706, 24))
+            self.text("SHIELD", 22, (150, 225, 255), (722, 14))
         if p.guns:
             self.text("Q: swap weapon", 20, (170, 170, 190), (W - 18, 42), "topright")
 
@@ -1155,7 +1178,7 @@ class Game:
     def draw_shop(self):
         scr = self.screen
         self.dim()
-        panel = pygame.Rect(150, 86, 660, 470)
+        panel = pygame.Rect(150, 50, 660, 530)
         pygame.draw.rect(scr, (44, 40, 62), panel, border_radius=12)
         pygame.draw.rect(scr, (255, 210, 70), panel, 3, border_radius=12)
         self.text(f"STORY {self.story} CLEARED  -  SHOP", 40, (255, 220, 90), (panel.centerx, panel.top + 34), "center")
