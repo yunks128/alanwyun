@@ -26,7 +26,7 @@ W, H = 960, 600
 FPS = 60
 CEIL_Y = 70            # bottom edge of the ceiling / HUD strip
 FLOOR_Y = 500          # top edge of the floor
-TOP_STORY = 100
+TOP_STORY = 50
 
 PW, PH = 28, 44        # player size
 SPEED = 250
@@ -931,7 +931,7 @@ class Game:
         scr.blit(self.backdrop, (0, 0))
         self.dim(120)
         self.text("THE TOWER", 120, (255, 220, 90), (W // 2, 130), "center")
-        self.text(f"Climb {TOP_STORY} stories of ghosts, lava, flames and turrets to escape.", 30,
+        self.text(f"Climb {TOP_STORY} stories of ghosts, lava and flames to escape.", 30,
                   (225, 225, 240), (W // 2, 215), "center")
         lines = [
             ("Left / Right", "move"),
